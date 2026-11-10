@@ -2,9 +2,14 @@
 # When adding or upgrading a package, try the newest release first; only step back when it really
 # doesn't work, and write down here why. The Python version lives in .python-version (3.15.2).
 #
-# Only what the code uses today is listed. psycopg, google-auth and cachecontrol come in with the
-# diary's first database / login endpoints (see all-mo-diary/docs/router-backend-plan.md).
+# Only what the code uses today is listed; psycopg comes in with the diary's first database endpoint.
 Flask==3.1.3
 Werkzeug==3.1.9
 gunicorn==27.0.0
 python-dotenv==1.2.4
+# Verifying Google ID tokens at sign-in (apps/diary/google_auth.py).
+google-auth==2.62.1
+# google-auth re-fetches Google's signing keys on every verification; CacheControl makes it honour
+# Google's Cache-Control header instead (same as mama-fufood / group-judge).
+cachecontrol==0.14.4
+requests==2.34.2

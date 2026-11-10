@@ -1,8 +1,11 @@
 """全心日記's Flask app.
 
 The phone app keeps diaries on the phone and in the user's own Google Drive; this backend never
-stores diary content. Its endpoints (login session, daily check with the font list, feedback)
-arrive with the app features that need them; see all-mo-diary/docs/SPEC_DRAFT.md.
+stores diary content. Endpoints are in routes.py: the sign-in exchange now; the daily check (font
+list, minimum version) and feedback arrive with the app features that need them.
+
+Settings (DIARY__ prefix): GOOGLE_CLIENT_ID (the web client id; the phone's ID tokens carry it as
+their audience) and SESSION_SECRET (signs the app pass).
 """
 
 from __future__ import annotations
@@ -13,6 +16,8 @@ from flask import Flask, jsonify
 from werkzeug.exceptions import HTTPException
 
 from router.settings import AppSettings
+
+from . import routes
 
 log = logging.getLogger(__name__)
 
@@ -25,6 +30,7 @@ def create_app(settings: AppSettings) -> Flask:
     app.config["MAX_CONTENT_LENGTH"] = MAX_CONTENT_LENGTH
     app.json.ensure_ascii = False
     app.extensions["diary.settings"] = settings
+    app.register_blueprint(routes.bp)
 
     @app.errorhandler(HTTPException)
     def _http_error(exc):
