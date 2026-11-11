@@ -1,0 +1,44 @@
+{
+ "name": "units",
+ "version": "20261023000000",
+ "format_version": 1,
+ "content": {
+  "units": [
+   {
+    "id": 1,
+    "name": "克",
+    "sort": 1,
+    "default": true,
+    "disabled": false
+   },
+   {
+    "id": 2,
+    "name": "毫升",
+    "sort": 2,
+    "default": false,
+    "disabled": false
+   },
+   {
+    "id": 3,
+    "name": "口",
+    "sort": 3,
+    "default": false,
+    "disabled": false
+   },
+   {
+    "id": 4,
+    "name": "小匙",
+    "sort": 4,
+    "default": false,
+    "disabled": false
+   },
+   {
+    "id": 5,
+    "name": "大匙",
+    "sort": 5,
+    "default": false,
+    "disabled": false
+   }
+  ]
+ }
+}

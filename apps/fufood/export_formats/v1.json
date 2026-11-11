@@ -1,0 +1,33 @@
+{
+ "format_version": 1,
+ "min_app_version": "1.0.0",
+ "description": "第 1 版匯出格式的 data.json(App 1.x;規格見 EXPORT_FORMAT_DRAFT.md 第 5 節)。和第 0 版相比,紀錄多了 digestive(腹瀉或嘔吐)。欄位全部必填,digestive 可以是 null(沒填)。",
+ "root": {"type": "object", "fields": {
+  "format_version": {"type": "int", "const": 1},
+  "settings": {"type": "object", "fields": {
+   "week_start": {"type": "enum", "values": ["monday", "sunday"]},
+   "theme": {"type": "enum", "values": ["dark", "light", "system"]}
+  }},
+  "babies": {"type": "array", "min": 1, "max": 8, "unique": ["seq", "name"], "items": {"type": "object", "fields": {
+   "seq": {"type": "int", "min": 1},
+   "name": {"type": "string", "min_chars": 1, "max_chars": 20},
+   "records": {"type": "array", "items": {"type": "object", "fields": {
+    "id": {"type": "uuid4", "unique_in_file": true},
+    "time": {"type": "utc_minute"},
+    "tz_offset": {"type": "tz_offset"},
+    "food_id": {"type": "int", "min": 1},
+    "prepared_amount": {"type": "amount"},
+    "prepared_unit_id": {"type": "int", "min": 1},
+    "eaten_amount": {"type": "amount"},
+    "eaten_unit_id": {"type": "int", "min": 1},
+    "allergy": {"type": "enum", "values": ["none", "same_day", "next_day"], "nullable": true},
+    "reaction": {"type": "enum", "values": ["reject", "accept", "like"], "nullable": true},
+    "digestive": {"type": "enum", "values": ["normal", "diarrhea", "vomiting", "diarrhea_vomiting"], "nullable": true},
+    "note": {"type": "string", "min_chars": 0, "max_chars": 500},
+    "photos": {"type": "array", "max": 3, "items": {"type": "photo_path", "unique_in_file": true}},
+    "created_at": {"type": "utc_millis"},
+    "updated_at": {"type": "utc_millis"}
+   }}}
+  }}}
+ }}
+}

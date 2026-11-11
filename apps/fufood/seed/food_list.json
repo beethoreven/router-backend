@@ -1,0 +1,928 @@
+{
+ "name": "food_list",
+ "version": "20261023000000",
+ "format_version": 1,
+ "content": {
+  "groups": [
+   {
+    "id": 1,
+    "name": "五穀",
+    "emoji": "🌾",
+    "sort": 1,
+    "disabled": false
+   },
+   {
+    "id": 2,
+    "name": "根莖",
+    "emoji": "🥔",
+    "sort": 2,
+    "disabled": false
+   },
+   {
+    "id": 3,
+    "name": "葉菜",
+    "emoji": "🥬",
+    "sort": 3,
+    "disabled": false
+   },
+   {
+    "id": 4,
+    "name": "瓜果",
+    "emoji": "🥒",
+    "sort": 4,
+    "disabled": false
+   },
+   {
+    "id": 5,
+    "name": "豆類",
+    "emoji": "🌱",
+    "sort": 5,
+    "disabled": false
+   },
+   {
+    "id": 6,
+    "name": "菇類",
+    "emoji": "🍄",
+    "sort": 6,
+    "disabled": false
+   },
+   {
+    "id": 7,
+    "name": "水果",
+    "emoji": "🍎",
+    "sort": 7,
+    "disabled": false
+   },
+   {
+    "id": 8,
+    "name": "蛋肉",
+    "emoji": "🍖",
+    "sort": 8,
+    "disabled": false
+   },
+   {
+    "id": 9,
+    "name": "海鮮",
+    "emoji": "🐟",
+    "sort": 9,
+    "disabled": false
+   },
+   {
+    "id": 10,
+    "name": "乳製品",
+    "emoji": "🥛",
+    "sort": 10,
+    "disabled": false
+   },
+   {
+    "id": 11,
+    "name": "堅果種子",
+    "emoji": "🌰",
+    "sort": 11,
+    "disabled": false
+   }
+  ],
+  "foods": [
+   {
+    "id": 1,
+    "group_id": 1,
+    "name": "十倍粥",
+    "emoji": "🥣",
+    "sort": 1,
+    "disabled": false
+   },
+   {
+    "id": 2,
+    "group_id": 1,
+    "name": "糙米粥",
+    "emoji": "🍚",
+    "sort": 2,
+    "disabled": false
+   },
+   {
+    "id": 3,
+    "group_id": 1,
+    "name": "燕麥",
+    "emoji": "🌾",
+    "sort": 3,
+    "disabled": false
+   },
+   {
+    "id": 4,
+    "group_id": 1,
+    "name": "小米",
+    "emoji": "🌾",
+    "sort": 4,
+    "disabled": false
+   },
+   {
+    "id": 5,
+    "group_id": 1,
+    "name": "玉米",
+    "emoji": "🌽",
+    "sort": 5,
+    "disabled": false
+   },
+   {
+    "id": 6,
+    "group_id": 1,
+    "name": "麵條",
+    "emoji": "🍜",
+    "sort": 6,
+    "disabled": false
+   },
+   {
+    "id": 7,
+    "group_id": 1,
+    "name": "吐司",
+    "emoji": "🍞",
+    "sort": 7,
+    "disabled": false
+   },
+   {
+    "id": 8,
+    "group_id": 2,
+    "name": "地瓜",
+    "emoji": "🍠",
+    "sort": 1,
+    "disabled": false
+   },
+   {
+    "id": 9,
+    "group_id": 2,
+    "name": "馬鈴薯",
+    "emoji": "🥔",
+    "sort": 2,
+    "disabled": false
+   },
+   {
+    "id": 10,
+    "group_id": 2,
+    "name": "胡蘿蔔",
+    "emoji": "🥕",
+    "sort": 3,
+    "disabled": false
+   },
+   {
+    "id": 11,
+    "group_id": 2,
+    "name": "山藥",
+    "emoji": "🥔",
+    "sort": 4,
+    "disabled": false
+   },
+   {
+    "id": 12,
+    "group_id": 2,
+    "name": "芋頭",
+    "emoji": "🥔",
+    "sort": 5,
+    "disabled": false
+   },
+   {
+    "id": 13,
+    "group_id": 2,
+    "name": "白蘿蔔",
+    "emoji": "🥔",
+    "sort": 6,
+    "disabled": false
+   },
+   {
+    "id": 14,
+    "group_id": 2,
+    "name": "洋蔥",
+    "emoji": "🧅",
+    "sort": 7,
+    "disabled": false
+   },
+   {
+    "id": 15,
+    "group_id": 2,
+    "name": "竹筍",
+    "emoji": "🥔",
+    "sort": 8,
+    "disabled": false
+   },
+   {
+    "id": 16,
+    "group_id": 2,
+    "name": "蘆筍",
+    "emoji": "🥔",
+    "sort": 9,
+    "disabled": false
+   },
+   {
+    "id": 17,
+    "group_id": 3,
+    "name": "高麗菜",
+    "emoji": "🥬",
+    "sort": 1,
+    "disabled": false
+   },
+   {
+    "id": 18,
+    "group_id": 3,
+    "name": "青江菜",
+    "emoji": "🥬",
+    "sort": 2,
+    "disabled": false
+   },
+   {
+    "id": 19,
+    "group_id": 3,
+    "name": "小白菜",
+    "emoji": "🥬",
+    "sort": 3,
+    "disabled": false
+   },
+   {
+    "id": 20,
+    "group_id": 3,
+    "name": "菠菜",
+    "emoji": "🥬",
+    "sort": 4,
+    "disabled": false
+   },
+   {
+    "id": 21,
+    "group_id": 3,
+    "name": "地瓜葉",
+    "emoji": "🥬",
+    "sort": 5,
+    "disabled": false
+   },
+   {
+    "id": 22,
+    "group_id": 3,
+    "name": "莧菜",
+    "emoji": "🥬",
+    "sort": 6,
+    "disabled": false
+   },
+   {
+    "id": 23,
+    "group_id": 3,
+    "name": "空心菜",
+    "emoji": "🥬",
+    "sort": 7,
+    "disabled": false
+   },
+   {
+    "id": 24,
+    "group_id": 3,
+    "name": "油菜",
+    "emoji": "🥬",
+    "sort": 8,
+    "disabled": false
+   },
+   {
+    "id": 25,
+    "group_id": 3,
+    "name": "娃娃菜",
+    "emoji": "🥬",
+    "sort": 9,
+    "disabled": false
+   },
+   {
+    "id": 26,
+    "group_id": 3,
+    "name": "大陸妹",
+    "emoji": "🥬",
+    "sort": 10,
+    "disabled": false
+   },
+   {
+    "id": 27,
+    "group_id": 3,
+    "name": "A菜",
+    "emoji": "🥬",
+    "sort": 11,
+    "disabled": false
+   },
+   {
+    "id": 28,
+    "group_id": 3,
+    "name": "芥菜",
+    "emoji": "🥬",
+    "sort": 12,
+    "disabled": false
+   },
+   {
+    "id": 29,
+    "group_id": 3,
+    "name": "水蓮",
+    "emoji": "🥬",
+    "sort": 13,
+    "disabled": false
+   },
+   {
+    "id": 30,
+    "group_id": 3,
+    "name": "綠花椰",
+    "emoji": "🥦",
+    "sort": 14,
+    "disabled": false
+   },
+   {
+    "id": 31,
+    "group_id": 3,
+    "name": "白花椰",
+    "emoji": "🥦",
+    "sort": 15,
+    "disabled": false
+   },
+   {
+    "id": 32,
+    "group_id": 4,
+    "name": "南瓜",
+    "emoji": "🎃",
+    "sort": 1,
+    "disabled": false
+   },
+   {
+    "id": 33,
+    "group_id": 4,
+    "name": "小黃瓜",
+    "emoji": "🥒",
+    "sort": 2,
+    "disabled": false
+   },
+   {
+    "id": 34,
+    "group_id": 4,
+    "name": "櫛瓜",
+    "emoji": "🥒",
+    "sort": 3,
+    "disabled": false
+   },
+   {
+    "id": 35,
+    "group_id": 4,
+    "name": "絲瓜",
+    "emoji": "🥒",
+    "sort": 4,
+    "disabled": false
+   },
+   {
+    "id": 36,
+    "group_id": 4,
+    "name": "冬瓜",
+    "emoji": "🥒",
+    "sort": 5,
+    "disabled": false
+   },
+   {
+    "id": 37,
+    "group_id": 4,
+    "name": "苦瓜",
+    "emoji": "🥒",
+    "sort": 6,
+    "disabled": false
+   },
+   {
+    "id": 38,
+    "group_id": 4,
+    "name": "茄子",
+    "emoji": "🍆",
+    "sort": 7,
+    "disabled": false
+   },
+   {
+    "id": 39,
+    "group_id": 4,
+    "name": "甜椒",
+    "emoji": "🫑",
+    "sort": 8,
+    "disabled": false
+   },
+   {
+    "id": 40,
+    "group_id": 4,
+    "name": "青椒",
+    "emoji": "🫑",
+    "sort": 9,
+    "disabled": false
+   },
+   {
+    "id": 41,
+    "group_id": 4,
+    "name": "秋葵",
+    "emoji": "🥒",
+    "sort": 10,
+    "disabled": false
+   },
+   {
+    "id": 42,
+    "group_id": 4,
+    "name": "玉米筍",
+    "emoji": "🌽",
+    "sort": 11,
+    "disabled": false
+   },
+   {
+    "id": 43,
+    "group_id": 5,
+    "name": "豆腐",
+    "emoji": "🌱",
+    "sort": 1,
+    "disabled": false
+   },
+   {
+    "id": 44,
+    "group_id": 5,
+    "name": "四季豆",
+    "emoji": "🌱",
+    "sort": 2,
+    "disabled": false
+   },
+   {
+    "id": 45,
+    "group_id": 5,
+    "name": "豌豆",
+    "emoji": "🌱",
+    "sort": 3,
+    "disabled": false
+   },
+   {
+    "id": 46,
+    "group_id": 5,
+    "name": "豆芽菜",
+    "emoji": "🌱",
+    "sort": 4,
+    "disabled": false
+   },
+   {
+    "id": 47,
+    "group_id": 5,
+    "name": "黃豆",
+    "emoji": "🌱",
+    "sort": 5,
+    "disabled": false
+   },
+   {
+    "id": 48,
+    "group_id": 5,
+    "name": "豆漿",
+    "emoji": "🌱",
+    "sort": 6,
+    "disabled": false
+   },
+   {
+    "id": 49,
+    "group_id": 6,
+    "name": "香菇",
+    "emoji": "🍄",
+    "sort": 1,
+    "disabled": false
+   },
+   {
+    "id": 50,
+    "group_id": 6,
+    "name": "鴻禧菇",
+    "emoji": "🍄",
+    "sort": 2,
+    "disabled": false
+   },
+   {
+    "id": 51,
+    "group_id": 6,
+    "name": "秀珍菇",
+    "emoji": "🍄",
+    "sort": 3,
+    "disabled": false
+   },
+   {
+    "id": 52,
+    "group_id": 6,
+    "name": "雪白菇",
+    "emoji": "🍄",
+    "sort": 4,
+    "disabled": false
+   },
+   {
+    "id": 53,
+    "group_id": 6,
+    "name": "金針菇",
+    "emoji": "🍄",
+    "sort": 5,
+    "disabled": false
+   },
+   {
+    "id": 54,
+    "group_id": 6,
+    "name": "木耳",
+    "emoji": "🍄",
+    "sort": 6,
+    "disabled": false
+   },
+   {
+    "id": 55,
+    "group_id": 7,
+    "name": "蘋果",
+    "emoji": "🍎",
+    "sort": 1,
+    "disabled": false
+   },
+   {
+    "id": 56,
+    "group_id": 7,
+    "name": "香蕉",
+    "emoji": "🍌",
+    "sort": 2,
+    "disabled": false
+   },
+   {
+    "id": 57,
+    "group_id": 7,
+    "name": "梨子",
+    "emoji": "🍐",
+    "sort": 3,
+    "disabled": false
+   },
+   {
+    "id": 58,
+    "group_id": 7,
+    "name": "芭樂",
+    "emoji": "🍎",
+    "sort": 4,
+    "disabled": false
+   },
+   {
+    "id": 59,
+    "group_id": 7,
+    "name": "木瓜",
+    "emoji": "🍎",
+    "sort": 5,
+    "disabled": false
+   },
+   {
+    "id": 60,
+    "group_id": 7,
+    "name": "西瓜",
+    "emoji": "🍉",
+    "sort": 6,
+    "disabled": false
+   },
+   {
+    "id": 61,
+    "group_id": 7,
+    "name": "葡萄",
+    "emoji": "🍇",
+    "sort": 7,
+    "disabled": false
+   },
+   {
+    "id": 62,
+    "group_id": 7,
+    "name": "草莓",
+    "emoji": "🍓",
+    "sort": 8,
+    "disabled": false
+   },
+   {
+    "id": 63,
+    "group_id": 7,
+    "name": "奇異果",
+    "emoji": "🥝",
+    "sort": 9,
+    "disabled": false
+   },
+   {
+    "id": 64,
+    "group_id": 7,
+    "name": "火龍果",
+    "emoji": "🍎",
+    "sort": 10,
+    "disabled": false
+   },
+   {
+    "id": 65,
+    "group_id": 7,
+    "name": "藍莓",
+    "emoji": "🫐",
+    "sort": 11,
+    "disabled": false
+   },
+   {
+    "id": 66,
+    "group_id": 7,
+    "name": "哈密瓜",
+    "emoji": "🍈",
+    "sort": 12,
+    "disabled": false
+   },
+   {
+    "id": 67,
+    "group_id": 7,
+    "name": "芒果",
+    "emoji": "🥭",
+    "sort": 13,
+    "disabled": false
+   },
+   {
+    "id": 68,
+    "group_id": 7,
+    "name": "鳳梨",
+    "emoji": "🍍",
+    "sort": 14,
+    "disabled": false
+   },
+   {
+    "id": 69,
+    "group_id": 7,
+    "name": "橘子",
+    "emoji": "🍊",
+    "sort": 15,
+    "disabled": false
+   },
+   {
+    "id": 70,
+    "group_id": 7,
+    "name": "柚子",
+    "emoji": "🍊",
+    "sort": 16,
+    "disabled": false
+   },
+   {
+    "id": 71,
+    "group_id": 7,
+    "name": "酪梨",
+    "emoji": "🥑",
+    "sort": 17,
+    "disabled": false
+   },
+   {
+    "id": 72,
+    "group_id": 7,
+    "name": "蓮霧",
+    "emoji": "🍎",
+    "sort": 18,
+    "disabled": false
+   },
+   {
+    "id": 73,
+    "group_id": 7,
+    "name": "柿子",
+    "emoji": "🍎",
+    "sort": 19,
+    "disabled": false
+   },
+   {
+    "id": 74,
+    "group_id": 7,
+    "name": "龍眼",
+    "emoji": "🍎",
+    "sort": 20,
+    "disabled": false
+   },
+   {
+    "id": 75,
+    "group_id": 7,
+    "name": "櫻桃",
+    "emoji": "🍒",
+    "sort": 21,
+    "disabled": false
+   },
+   {
+    "id": 76,
+    "group_id": 7,
+    "name": "榴蓮",
+    "emoji": "🍎",
+    "sort": 22,
+    "disabled": false
+   },
+   {
+    "id": 77,
+    "group_id": 7,
+    "name": "番茄",
+    "emoji": "🍅",
+    "sort": 23,
+    "disabled": false
+   },
+   {
+    "id": 78,
+    "group_id": 8,
+    "name": "蛋黃",
+    "emoji": "🥚",
+    "sort": 1,
+    "disabled": false
+   },
+   {
+    "id": 79,
+    "group_id": 8,
+    "name": "蛋白",
+    "emoji": "🥚",
+    "sort": 2,
+    "disabled": false
+   },
+   {
+    "id": 80,
+    "group_id": 8,
+    "name": "全蛋",
+    "emoji": "🍳",
+    "sort": 3,
+    "disabled": false
+   },
+   {
+    "id": 81,
+    "group_id": 8,
+    "name": "雞肉",
+    "emoji": "🍗",
+    "sort": 4,
+    "disabled": false
+   },
+   {
+    "id": 82,
+    "group_id": 8,
+    "name": "豬肉",
+    "emoji": "🍖",
+    "sort": 5,
+    "disabled": false
+   },
+   {
+    "id": 83,
+    "group_id": 8,
+    "name": "牛肉",
+    "emoji": "🥩",
+    "sort": 6,
+    "disabled": false
+   },
+   {
+    "id": 84,
+    "group_id": 8,
+    "name": "羊肉",
+    "emoji": "🍖",
+    "sort": 7,
+    "disabled": false
+   },
+   {
+    "id": 85,
+    "group_id": 8,
+    "name": "鴨肉",
+    "emoji": "🦆",
+    "sort": 8,
+    "disabled": false
+   },
+   {
+    "id": 86,
+    "group_id": 8,
+    "name": "鵝肉",
+    "emoji": "🍖",
+    "sort": 9,
+    "disabled": false
+   },
+   {
+    "id": 87,
+    "group_id": 9,
+    "name": "鮭魚",
+    "emoji": "🐟",
+    "sort": 1,
+    "disabled": false
+   },
+   {
+    "id": 88,
+    "group_id": 9,
+    "name": "台灣鯛",
+    "emoji": "🐟",
+    "sort": 2,
+    "disabled": false
+   },
+   {
+    "id": 89,
+    "group_id": 9,
+    "name": "虱目魚",
+    "emoji": "🐟",
+    "sort": 3,
+    "disabled": false
+   },
+   {
+    "id": 90,
+    "group_id": 9,
+    "name": "鮪魚",
+    "emoji": "🐟",
+    "sort": 4,
+    "disabled": false
+   },
+   {
+    "id": 91,
+    "group_id": 9,
+    "name": "石斑魚",
+    "emoji": "🐟",
+    "sort": 5,
+    "disabled": false
+   },
+   {
+    "id": 92,
+    "group_id": 9,
+    "name": "吻仔魚",
+    "emoji": "🐟",
+    "sort": 6,
+    "disabled": false
+   },
+   {
+    "id": 93,
+    "group_id": 9,
+    "name": "蝦子",
+    "emoji": "🦐",
+    "sort": 7,
+    "disabled": false
+   },
+   {
+    "id": 94,
+    "group_id": 9,
+    "name": "螃蟹",
+    "emoji": "🦀",
+    "sort": 8,
+    "disabled": false
+   },
+   {
+    "id": 95,
+    "group_id": 9,
+    "name": "花枝",
+    "emoji": "🦑",
+    "sort": 9,
+    "disabled": false
+   },
+   {
+    "id": 96,
+    "group_id": 9,
+    "name": "魷魚",
+    "emoji": "🦑",
+    "sort": 10,
+    "disabled": false
+   },
+   {
+    "id": 97,
+    "group_id": 9,
+    "name": "蚵仔",
+    "emoji": "🦪",
+    "sort": 11,
+    "disabled": false
+   },
+   {
+    "id": 98,
+    "group_id": 9,
+    "name": "蛤蜊",
+    "emoji": "🦪",
+    "sort": 12,
+    "disabled": false
+   },
+   {
+    "id": 99,
+    "group_id": 9,
+    "name": "干貝",
+    "emoji": "🦪",
+    "sort": 13,
+    "disabled": false
+   },
+   {
+    "id": 100,
+    "group_id": 10,
+    "name": "優格",
+    "emoji": "🥛",
+    "sort": 1,
+    "disabled": false
+   },
+   {
+    "id": 101,
+    "group_id": 10,
+    "name": "起司",
+    "emoji": "🧀",
+    "sort": 2,
+    "disabled": false
+   },
+   {
+    "id": 102,
+    "group_id": 10,
+    "name": "牛奶",
+    "emoji": "🥛",
+    "sort": 3,
+    "disabled": false
+   },
+   {
+    "id": 103,
+    "group_id": 11,
+    "name": "花生",
+    "emoji": "🥜",
+    "sort": 1,
+    "disabled": false
+   },
+   {
+    "id": 104,
+    "group_id": 11,
+    "name": "堅果",
+    "emoji": "🌰",
+    "sort": 2,
+    "disabled": false
+   },
+   {
+    "id": 105,
+    "group_id": 11,
+    "name": "芝麻",
+    "emoji": "🌰",
+    "sort": 3,
+    "disabled": false
+   }
+  ]
+ }
+}

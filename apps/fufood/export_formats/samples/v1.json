@@ -1,0 +1,56 @@
+{
+ "format_version": 1,
+ "settings": {
+  "week_start": "monday",
+  "theme": "dark"
+ },
+ "babies": [
+  {
+   "seq": 1,
+   "name": "小寶",
+   "records": [
+    {
+     "id": "6f1c2a9e-3b4d-4e8f-9a1b-2c3d4e5f6a7b",
+     "time": "2026-10-23T03:30:00Z",
+     "tz_offset": "+08:00",
+     "food_id": 12,
+     "prepared_amount": 30,
+     "prepared_unit_id": 1,
+     "eaten_amount": 25.5,
+     "eaten_unit_id": 1,
+     "allergy": "none",
+     "reaction": "like",
+     "digestive": "normal",
+     "note": "",
+     "photos": [
+      "photos/9d8e7f6a-5b4c-4d3e-8f2a-1b0c9d8e7f6a.jpg"
+     ],
+     "created_at": "2026-10-23T03:31:12.345Z",
+     "updated_at": "2026-10-23T03:31:12.345Z"
+    },
+    {
+     "id": "0b7f2c1d-9e8a-4b6c-a5d4-3e2f1a0b9c8d",
+     "time": "2026-10-24T11:05:00Z",
+     "tz_offset": "+08:00",
+     "food_id": 3,
+     "prepared_amount": 999.99,
+     "prepared_unit_id": 4,
+     "eaten_amount": 0,
+     "eaten_unit_id": 3,
+     "allergy": null,
+     "reaction": null,
+     "digestive": "diarrhea",
+     "note": "第一次吃燕麥 👶",
+     "photos": [],
+     "created_at": "2026-10-24T11:06:00.000Z",
+     "updated_at": "2026-10-24T12:00:01.002Z"
+    }
+   ]
+  },
+  {
+   "seq": 3,
+   "name": "二寶",
+   "records": []
+  }
+ ]
+}
