@@ -1,8 +1,8 @@
-"""Verifying a Google ID token (from group-judge, mama-fufood and the diary, which had the same copy).
+"""Verifying a Google ID token.
 
 An ID token only proves "this is that Google account, right now" (it expires in about an hour). Apps
 that keep users signed in trade it once for their own pass (shared.app_pass) and never use it as an
-ongoing credential. fireless-war deliberately verifies one on every request (it doesn't keep sign-ins).
+ongoing credential. An app that deliberately keeps no sign-in verifies one on every request instead.
 
 Defences, all before any network call:
 1. A string that isn't JWT-shaped, or is longer than MAX_ID_TOKEN_LENGTH, is rejected without
@@ -13,7 +13,7 @@ Defences, all before any network call:
    a process shared by several apps would hold a thread for two minutes per stuck sign-in.
 5. 10 seconds of clock skew allowed; email_verified is required.
 
-"Invalid" and "can't check right now" are different answers (fireless-war's lesson): a token that fails
+"Invalid" and "can't check right now" are different answers: a token that fails
 verification returns None (answer 401, sign the user out), but Google's keys being unreachable raises
 VerificationUnavailable (shared.flask_app answers 503, and the client keeps its sign-in). Only a
 transport error counts as unavailable; anything else, including a wrong issuer, is an invalid token.

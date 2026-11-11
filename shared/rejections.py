@@ -1,4 +1,4 @@
-"""Rejected requests are counted, not logged one by one (from mama-fufood and the diary).
+"""Rejected requests are counted, not logged one by one.
 
 Under a flood of bad requests, a log line per request is itself the cost, and it can push real errors
 out of the log. Each app keeps its own RejectionLog and writes at most one summary line a minute,

@@ -9,7 +9,7 @@ python-dotenv==1.2.4
 # Verifying Google ID tokens at sign-in (apps/diary/google_auth.py).
 google-auth==2.62.1
 # google-auth re-fetches Google's signing keys on every verification; CacheControl makes it honour
-# Google's Cache-Control header instead (same as mama-fufood / group-judge).
+# Google's Cache-Control header instead.
 cachecontrol==0.14.4
 requests==2.34.2
 # The diary's database (Neon Postgres). Each request opens its own connection (apps/diary/db.py).

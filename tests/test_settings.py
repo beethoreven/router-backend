@@ -39,7 +39,7 @@ def test_unrelated_double_underscore_variables_are_ignored():
 
 def test_quoted_value_is_refused_without_printing_it():
     with pytest.raises(ConfigError) as exc:
-        load_all(["diary"], {"DIARY__DATABASE_URL": '"postgresql://user:pw@host/db"'})
+        load_all(["diary"], {"DIARY__DATABASE_URL": '"postgresql://user@host/db"'})
     assert "pw" not in str(exc.value) and "DIARY__DATABASE_URL" in str(exc.value)
 
 

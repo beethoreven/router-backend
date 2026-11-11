@@ -9,8 +9,7 @@ Prefix rule: the app name upper-cased, hyphens turned into underscores, followed
   process they would all read the same value. tests/test_isolation.py fails if code under apps/
   touches os.environ / os.getenv.
 
-★ Mistakes stop the service from starting instead of being guessed around (same reasoning as
-  boo-king-king's tenancy.py): a bare DATABASE_URL, a prefix that matches no app (DAIRY__...),
+★ Mistakes stop the service from starting instead of being guessed around: a bare DATABASE_URL, a prefix that matches no app (DAIRY__...),
   two apps pointing at the same database, or a value wrapped in quotes. A wrong guess here means
   one app reading another app's data. On Render a failed start keeps the previous version running.
 

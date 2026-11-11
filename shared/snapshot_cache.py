@@ -1,5 +1,4 @@
-"""An in-memory copy of an app's public data, reloaded from its database (from mama-fufood's
-services/public_cache.py and the diary's cache.py, which were the same code with different contents).
+"""An in-memory copy of an app's public data, reloaded from its database.
 
 The point is that a hot path (the daily check) never touches the database, so Neon can sleep.
 
@@ -8,10 +7,10 @@ The point is that a hot path (the daily check) never touches the database, so Ne
   calls reload() after it succeeds.
 - **Rebuilt after a restart.** start_background_loader() is meant for a before_request hook: the first
   request starts a thread that loads and retries every `retry_seconds` until it succeeds. Never start
-  it at import or in create_app (work started at import never ran on Render — mama-fufood, mama-stocker).
+  it at import or in create_app (work started at import has been seen never to run on Render).
 - **Before the first load**, ensure_loaded() tries once (at most every REQUEST_RETRY_MIN_SECONDS) and
   returns None on failure, so the endpoint can answer "try again later".
-- ★ ensure_loaded() never waits for the load lock (known-issue-check #16): if another request or the
+- ★ ensure_loaded() never waits for the load lock: if another request or the
   background thread is already loading, it returns None at once instead of queueing behind a network
   call.
 

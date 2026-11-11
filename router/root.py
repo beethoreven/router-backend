@@ -3,8 +3,8 @@
     Local:       .venv/bin/python -m router.root           (http://localhost:5010)
     Production:  gunicorn wsgi:app --workers 1 --threads 16 --timeout 120
 
-★ Exactly one worker. Apps keep per-day counters and caches in process memory (mama-fufood's
-  daily-check quota, for one); with two workers each would count separately.
+★ Exactly one worker. Apps keep per-day counters and caches in process memory (daily-check
+  quotas, for one); with two workers each would count separately.
 ★ More threads than a single app would need: the apps share them, and one slow request
   (a large upload, a slow outside call) must not leave the others waiting.
 ★ gunicorn's access log is turned off in code. It records every client IP, and the apps promise

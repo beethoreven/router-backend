@@ -2,20 +2,21 @@
 
 At sign-in the client trades one Google ID token for a pass and stores it; every later call carries
 the pass. Restoring the sign-in after the app or page is reopened never asks Google for a silent
-sign-in (that fails on real phones and shows an account picker — global CLAUDE.md, google-auth skill).
+sign-in (that fails on real phones and shows an account picker).
 
 - **Stateless**: {"v", "sub", "email", "iat", "exp"} plus an HMAC-SHA256 signature. The server stores
   nothing about users and only checks the signature and expiry, so a forged or expired pass is
-  rejected without touching any database (known-issue-check #33).
+  rejected without touching any database: anyone can send a pass-shaped string, and a lookup per
+  request would let them keep a scale-to-zero database awake.
 - Valid `days` days. A pass older than `renew_days` comes back with renew=True, and the app hands out a
-  fresh one (the diary and mama-fufood do it in the daily check), so active users never reach expiry.
+  fresh one (for example in a daily check), so active users never reach expiry.
 - No per-user revocation (nothing is stored). Rotating the app's SESSION_SECRET invalidates every pass.
 - The signing key is derived from the app's secret with a purpose string, so a pass can't be replayed
   as any other token signed with the same secret (the admin session uses another purpose).
 
-The format is byte-for-byte what mama-fufood (prefix "mff1.") and the diary ("amd1.") issued before
-they shared this code: passes already on phones stay valid as long as the app keeps its prefix,
-purpose and secret. tests/test_shared_app_pass.py pins both with known-answer vectors.
+Passes already on phones stay valid only while the app keeps its prefix, purpose and secret: an app
+that issued passes before using this module must pass the same values. tests/shared/test_auth.py pins
+the format with known-answer vectors.
 """
 
 from __future__ import annotations

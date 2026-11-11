@@ -1,7 +1,7 @@
-"""Text helpers more than one app needs (from mama-fufood and the diary).
+"""Text helpers more than one app needs.
 
 Version-number rules (how many digits each part may have) stay in each app: they are part of that
-app's spec, and mama-fufood's and the diary's differ.
+app's spec, and they differ between apps.
 """
 
 from __future__ import annotations

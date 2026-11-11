@@ -2,7 +2,7 @@
 
 Errors are {"error": message for people, "code": code}. Every call except /api/v1/session carries our
 own app pass (auth.app_pass); a missing or bad pass is rejected before any quota is used or the
-database is touched. Adapted from mama-fufood's routes/public.py.
+database is touched.
 """
 
 from __future__ import annotations
@@ -52,8 +52,8 @@ def _error(status: int, code: str, message: str):
 def authenticate():
     """For endpoints that need a signed-in user: (claims, None) or (None, error response).
 
-    Only our own pass is accepted — never a raw Google ID token. There are no older app versions
-    sending ID tokens, so unlike mama-fufood there is no compatibility path to carry.
+    Only our own pass is accepted — never a raw Google ID token. No released app version ever sent
+    ID tokens, so there is no compatibility path to carry.
     """
     claims = app_pass.verify(config.get().session_secret, google_auth.extract_bearer_token(request))
     if claims is None:
@@ -99,7 +99,8 @@ def check():
         return _error(400, "bad_request", "內容格式不對")
     app_version = parse_version(body.get("app_version"))
     # Sent from the first version, so a future iOS build can get its own minimum version without the
-    # server having to guess what old Android builds meant (known-issue-check #22 / #37).
+    # server having to guess what old Android builds meant: a value baked into a released client can
+    # never be changed afterwards.
     platform = body.get("platform")
     fonts_version = body.get("fonts_version")
     if app_version is None or platform not in PLATFORMS or not (

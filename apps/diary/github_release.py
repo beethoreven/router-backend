@@ -1,5 +1,5 @@
 """Streams an uploaded font (.otf.gz from tools/reduce_font.py) to the fonts repository's GitHub
-Release (docs/SPEC_DRAFT.md §11.1), checking and hashing it on the way through.
+Release, checking and hashing it on the way through.
 
 - Nothing is held in memory or on disk: the request body is read in 256 KiB chunks and each chunk is
   hashed, decompressed (only to hash and size the font inside) and forwarded to GitHub as it arrives.

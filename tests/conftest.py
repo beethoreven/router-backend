@@ -3,7 +3,7 @@
 - Tests that need Postgres use the `empty_database` fixture: a throwaway database named by
   TEST_DATABASE_URL (locally: `tools/local_db.sh start`). Without it those tests are skipped.
   **Never point it at a real database**: the fixture empties the public schema first.
-- Run everything before pushing — every app, not only yours (CLAUDE.md):
+- Run everything before pushing — every app, not only yours (README):
       TEST_DATABASE_URL=postgresql://postgres@localhost:5434/amd_test .venv/bin/python -m pytest
 """
 

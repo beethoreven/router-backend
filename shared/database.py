@@ -8,11 +8,11 @@
 
 Commits on normal exit, rolls back on an exception, always closes.
 
-Why no connection pool: on Render's free plan a frozen container left psycopg's pool workers dead after
-waking (group-judge and boo-king-king, 2026-08), and a pool keeps connections open, which keeps Neon
-awake and burns its free hours. Each call opens its own connection and closes it.
+Why no connection pool: on Render's free plan a frozen container can leave psycopg's pool workers dead
+after waking, and a pool keeps connections open, which keeps Neon awake and burns its free hours. Each
+call opens its own connection and closes it.
 
-Two caps (docs/router-backend-plan.md §5):
+Two caps:
 - per app (`max_connections`), so one busy app can't take every slot;
 - per process (PROCESS_MAX_CONNECTIONS), so all apps together stay within what one 512 MB instance and
   its threads can carry. The app slot is taken first, then the process slot, always in that order and
@@ -25,7 +25,7 @@ database that stops answering mid-query is cut by tcp_user_timeout. prepare_thre
 server-side prepared statements, which transaction-mode pooling breaks.
 
 Schema: `schema(cur)` runs once per process on the first connection, inside a transaction holding a
-Postgres advisory lock (known-issue-check #27): a process-local lock can't stop two processes — an
+Postgres advisory lock: a process-local lock can't stop two processes — an
 overlapping deploy, or the old single-app service still running during a move — from running the DDL
 at once. Keep `schema_lock` the same string the app used before moving here, so the old service and
 this one queue on the same lock. If it fails, the next connection tries again.

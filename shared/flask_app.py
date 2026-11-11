@@ -1,4 +1,4 @@
-"""Building an app's Flask object the same way everywhere (from mama-fufood's and the diary's app.py).
+"""Building an app's Flask object the same way everywhere.
 
     app = new_app(__name__, max_content_length=9 * 1024 * 1024)
     allow_cors(app, cfg.allowed_origins, paths=r"/api/admin/*")
@@ -84,7 +84,7 @@ def allow_cors(app: Flask, origins: tuple[str, ...] | list[str], *, paths: str =
     """Let these web origins call `paths` from a browser. Nothing else gets CORS headers.
 
     `origins` must be exact origins (AppSettings.origins() checks the shape) — no "*", no regex:
-    a regex like fireless-war's old r"http://localhost:\\d+" matches by prefix unless anchored.
+    a regex like r"http://localhost:\\d+" matches by prefix unless anchored.
     Calls from a phone app aren't from a browser and don't need CORS at all.
     """
     origins = list(origins)

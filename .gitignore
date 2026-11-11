@@ -4,3 +4,6 @@ __pycache__/
 .pytest_cache/
 .DS_Store
 .localdb/
+# Notes for local development tools; they never go into this repository.
+CLAUDE.md
+.claude/

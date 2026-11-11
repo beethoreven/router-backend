@@ -22,6 +22,6 @@ Rules (tests/test_isolation.py checks the first three):
 3. Something moves here only when two apps need the same logic. Code that only one app uses stays in
    that app, even if it is "security" (for example LINE's webhook signature lives in its app until a
    second LINE app joins).
-4. Changing anything here changes every app at once. The router-backend session owns this package:
-   other sessions ask it for changes instead of editing here (see CLAUDE.md).
+4. Changing anything here changes every app at once: change it on its own, not as part of one app's
+   work, and run every app's tests.
 """

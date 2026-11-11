@@ -19,7 +19,7 @@ class DiaryConfig:
     session_secret: str = field(default="", repr=False)
     allowed_origins: tuple[str, ...] = ()
     first_admin_email: str = ""
-    # Font files go to a GitHub Release (docs/SPEC_DRAFT.md §11.1): "owner/repo" and a token that can
+    # Font files go to a GitHub Release: "owner/repo" and a token that can
     # write to that repository only.
     fonts_repo: str = ""
     github_token: str = field(default="", repr=False)

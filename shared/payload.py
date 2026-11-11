@@ -20,7 +20,7 @@ class PayloadError(ValueError):
 
 
 def gunzip_limited(data: bytes, limit: int) -> bytes:
-    """解壓 gzip,解出來超過 limit 位元組就停止並拒絕(SPEC 第 10 節:伺服器解壓上限)。"""
+    """解壓 gzip,解出來超過 limit 位元組就停止並拒絕(防壓縮炸彈)。"""
     out = io.BytesIO()
     try:
         with gzip.GzipFile(fileobj=io.BytesIO(data)) as f:

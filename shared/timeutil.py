@@ -1,10 +1,10 @@
-"""The one source of "now" (from mama-fufood's timeutil.py, mama-stocker's clock.py and the diary).
+"""The one source of "now".
 
 - Store and compare in UTC.
 - "A day" is a Taipei day (daily limits, midnight reset). Taiwan has no daylight saving: a fixed
   UTC+8 needs no time-zone database.
 - ★ Never date.today() / datetime.now() without a zone: that's the host's zone, UTC on Render, and
-  between 00:00 and 08:00 Taipei time it is still yesterday there (mama-stocker's lesson).
+  between 00:00 and 08:00 Taipei time it is still yesterday there.
 
 Tests replace `now` to simulate crossing midnight; everything else goes through it. Replacing it
 affects every app in the test process, which is what a test of a day boundary wants.

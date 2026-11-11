@@ -1,4 +1,4 @@
-"""The admin console's API (/diary/api/admin/...). Adapted from mama-fufood's routes/admin.py.
+"""The admin console's API (/diary/api/admin/...).
 
 Every route except /login carries @require_admin — the console's lock is cosmetic, this is the gate.
 Writes take only whitelisted fields (each module validates); request bodies never go straight to SQL.

@@ -1,5 +1,4 @@
-"""The admin console's sign-in: sessions, the admin list, and the require_admin gate
-(from group-judge via mama-fufood and the diary, which had the same three files).
+"""The admin console's sign-in: sessions, the admin list, and the require_admin gate.
 
     admin = AdminAuth(
         "diary", database=db.database, purpose=b"all-mo-diary:admin-session:v1",

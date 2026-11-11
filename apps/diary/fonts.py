@@ -1,9 +1,9 @@
-"""The font list (docs/SPEC_DRAFT.md §9, §11): drafts edited in the admin console, published as a
+"""The font list: drafts edited in the admin console, published as a
 versioned release that the phones download with the daily check.
 
 - Each font: id, display name, sort order, disabled, licensed (a label only — uploads are never
   blocked on it), and its file on the GitHub Release (download URL, sizes, SHA-256s).
-- Same rules as mama-fufood's food list: IDs come from an IDENTITY column, never change and are never
+- IDs come from an IDENTITY column, never change and are never
   reused; a font that has been published can't be deleted, only disabled (phones may have diaries
   that name it).
 - Publishing writes a new font_releases row with the full list (enabled fonts that have a file),

@@ -5,15 +5,15 @@
 Why lazily: an app that fails to import (a bug, a missing package) must take down only its own
 prefix, never the whole service. Loading happens on the first request to that prefix, or on
 /ready, inside the worker. Nothing here runs at import time and nothing starts a thread
-(mama-fufood found that work started at import time silently never ran on Render).
+(work started at import time has been seen to silently never run on Render).
 
 A failed load is retried at most every RETRY_SECONDS, so a broken app doesn't re-import on
 every request but also recovers without a redeploy if the cause was temporary.
 
 ★ An app's create_app(settings) must not do network I/O (connect to its database, call an API).
   It runs under this app's load lock, so a slow or hanging connection would hold every request to
-  that app in the queue (known-issue-check #16). Connect lazily on the first request that needs it,
-  as mama-fufood's cache loader does.
+  that app in the queue. Connect lazily on the first request that needs it (shared.snapshot_cache
+  shows how).
 """
 
 from __future__ import annotations

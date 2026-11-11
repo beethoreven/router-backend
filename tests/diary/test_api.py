@@ -153,11 +153,12 @@ def test_admin_routes_need_an_admin_session(diary):
 
 def test_admins_add_remove_and_revocation(diary):
     admin = admin_headers(diary)
-    assert diary.post(f"{ADMIN}/admins", json={"email": "Wife@Example.com", "note": "老婆"}, headers=admin).status_code == 201
-    wife = admin_headers(diary, "wife@example.com")
-    assert diary.get(f"{ADMIN}/me", headers=wife).get_json() == {"email": "wife@example.com"}
-    assert diary.delete(f"{ADMIN}/admins/wife@example.com", headers=admin).status_code == 200
-    assert diary.get(f"{ADMIN}/me", headers=wife).status_code == 401
+    assert diary.post(f"{ADMIN}/admins", json={"email": "Second@Example.com", "note": "第二位管理員"},
+                      headers=admin).status_code == 201
+    second = admin_headers(diary, "second@example.com")
+    assert diary.get(f"{ADMIN}/me", headers=second).get_json() == {"email": "second@example.com"}
+    assert diary.delete(f"{ADMIN}/admins/second@example.com", headers=admin).status_code == 200
+    assert diary.get(f"{ADMIN}/me", headers=second).status_code == 401
     assert diary.delete(f"{ADMIN}/admins/admin@example.com", headers=admin).status_code == 400
 
 
@@ -180,7 +181,7 @@ def test_cors_only_for_the_admin_console(diary):
 
 @pytest.mark.parametrize("path", ["/diary/api/v1/check", "/diary/api/v1/feedback"])
 def test_forged_pass_never_touches_the_database(path, monkeypatch, diary_env, db_clean):
-    """known-issue-check #33: a well-formed but forged pass is rejected before any connection."""
+    """A well-formed but forged pass is rejected before any database connection."""
     from apps.diary import db
     from router.root import build
 

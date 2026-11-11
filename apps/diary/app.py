@@ -9,7 +9,7 @@ Settings: DIARY__* environment variables (config.py). Sign-in, database, error h
 from shared/ (auth.py and db.py say which pieces).
 
 ★ Nothing here starts a thread or connects anywhere when the app is built: the cache loader starts on
-  the first request, inside the worker (mama-fufood found work started at import never ran on Render).
+  the first request, inside the worker (work started at import has been seen never to run on Render).
 """
 
 from __future__ import annotations

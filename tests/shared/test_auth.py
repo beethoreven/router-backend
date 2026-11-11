@@ -1,9 +1,8 @@
 """shared.app_pass, shared.google_auth and shared.admin_auth's token checks (no database needed).
 
-The known-answer vectors were produced by the code each app ran before it moved to shared/ (the
-diary's apps/diary/app_tokens.py and mama-fufood's auth_utils/app_tokens.py / sessions.py, 2026-11-11).
+The known-answer vectors were produced by the implementations these apps used before this module.
 If one of these fails, passes already on users' phones, or admin sessions already in a database,
-would stop working after the move.
+stop working.
 """
 
 from __future__ import annotations
@@ -95,7 +94,7 @@ GOOD_SHAPE = "eyJhbGciOiJSUzI1NiIsImtpZCI6ImsxIn0.eyJzdWIiOiIxIn0.c2ln"  # heade
 
 
 def test_shape_checks_reject_without_contacting_google(monkeypatch):
-    """Garbage never reaches the network call (known-issue-check #33)."""
+    """Garbage never reaches the network call."""
     from google.oauth2 import id_token
 
     monkeypatch.setattr(id_token, "verify_oauth2_token", lambda *a, **k: pytest.fail("should not verify"))
