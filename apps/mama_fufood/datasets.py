@@ -1,4 +1,4 @@
-"""公用資料集(食材清單、單位)的草稿編輯與發布(SPEC 第 3 節「公用資料集規則」)。
+"""公用資料集(食材清單、單位)的草稿編輯與發布。
 
 - 分組、食材、單位三張表就是**草稿**;按「發布」才把草稿整理成一份內容,寫進
   dataset_releases 並產生新的版本號。App 只會拿到發布過的內容。
@@ -19,10 +19,10 @@ from shared.textutil import graphemes
 
 DATASETS = ("food_list", "units")
 # 每個資料集內容的「資料格式版本」。內容的結構改了才升,和 App 的版本號無關
-# (SPEC 第 2 節:公用資料集的格式版本另外計算,不影響 x)。
+# (公用資料集的格式版本另外計算,不影響 App 版本號的 x)。
 FORMAT_VERSION = {"food_list": 1, "units": 1}
 
-FOOD_NAME_MAX = 3      # 月曆每排放 emoji 加名稱,名稱一律 3 個字以內(SPEC 第 3 節)
+FOOD_NAME_MAX = 3      # 月曆每排放 emoji 加名稱,名稱一律 3 個字以內
 GROUP_NAME_MAX = 6
 UNIT_NAME_MAX = 4
 

@@ -27,9 +27,9 @@ class FufoodConfig:
     first_admin_email: str = ""
     # 資料庫一句查詢最多等幾秒。
     db_timeout_seconds: int = 20
-    # 公用資料快取載入失敗時,隔幾秒再試(SPEC 第 3 節第 2 項:每 30 秒重試)。
+    # 公用資料快取載入失敗時,隔幾秒再試。
     cache_retry_seconds: int = 30
-    # 每人每天的上限(SPEC 第 3、4、10 節;「一天」以台北時間計)。
+    # 每人每天的上限(「一天」以台北時間計)。
     daily_check_limit: int = 10
     convert_daily_limit: int = 5
     feedback_daily_limit: int = 3

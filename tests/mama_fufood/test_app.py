@@ -13,7 +13,7 @@ from shared import google_auth
 from tests.mama_fufood.conftest import MAMA_FUFOOD_ENV, bearer, pass_headers
 
 DAY = 24 * 60 * 60
-SECRET = MAMA_FUFOOD_ENV["MAMA_FUFOOD__SESSION_SECRET"]
+TEST_SECRET = MAMA_FUFOOD_ENV["MAMA_FUFOOD__SESSION_SECRET"]
 
 
 def _boom(*_a, **_k):
@@ -89,12 +89,11 @@ def test_loader_starts_on_first_request_not_at_load(mama_fufood_env, monkeypatch
 # ── 登入通行證 ────────────────────────────────────────────────
 
 def test_pass_format_is_unchanged():
-    """前綴、用途字串沿用搬過來之前的值,手機上已經發出去的通行證才會繼續有效
-    (已知值由 tests/shared/test_auth.py 釘住)。"""
+    """前綴與用途字串不能改,改了已經發出去的通行證會失效(已知值由 tests/shared/test_auth.py 釘住)。"""
     assert app_pass.prefix == "mff1."
-    token, exp = app_pass.issue(SECRET, "user-1", "mom@example.com")
+    token, exp = app_pass.issue(TEST_SECRET, "user-1", "mom@example.com")
     assert exp - time.time() == pytest.approx(180 * DAY, abs=5)
-    assert app_pass.verify(SECRET, token) == {"sub": "user-1", "email": "mom@example.com", "renew": False}
+    assert app_pass.verify(TEST_SECRET, token) == {"sub": "user-1", "email": "mom@example.com", "renew": False}
     # 後台的 session 和通行證不能互用。
     assert not admin.sessions.looks_valid(token)
 
@@ -108,7 +107,7 @@ def test_session_endpoint_exchanges_a_google_token(client):
     resp = client.post("/api/v1/session", headers=bearer("user-9", "dad@example.com"))
     assert resp.status_code == 200, resp.get_json()
     data = resp.get_json()
-    assert app_pass.verify(SECRET, data["token"])["sub"] == "user-9"
+    assert app_pass.verify(TEST_SECRET, data["token"])["sub"] == "user-9"
     assert client.post("/api/v1/session", headers={"Authorization": "Bearer nope"}).status_code == 401
     # 通行證本身不能拿來換新的通行證(只有 Google 登入才能換)。
     assert client.post("/api/v1/session", headers={"Authorization": f"Bearer {data['token']}"}).status_code == 401
@@ -122,7 +121,7 @@ def test_daily_check_accepts_the_pass_and_renews_old_ones(client, db):
 
     data = client.post("/api/v1/check", json=body,
                        headers=pass_headers(now=time.time() - 40 * DAY)).get_json()
-    assert app_pass.verify(SECRET, data["session_token"]) == {
+    assert app_pass.verify(TEST_SECRET, data["session_token"]) == {
         "sub": "user-1", "email": "mom@example.com", "renew": False}
     assert data["session_expires_at"] > time.time()
 

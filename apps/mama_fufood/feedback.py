@@ -1,4 +1,4 @@
-"""意見回饋(SPEC 第 10 節)。
+"""意見回饋。
 
 - 使用者按了送出才會有資料。Email 取自驗證過的登入憑證,是意見回饋裡唯一的
   個人資料;不另存帳號編號,不存 IP。
@@ -135,6 +135,6 @@ def delete(cur, feedback_id: str) -> bool:
 
 
 def delete_by_email(cur, email: str) -> int:
-    """個資刪除請求:刪掉這個 Email 的所有意見回饋(SPEC 第 3 節「管理後台功能」)。"""
+    """個資刪除請求:刪掉這個 Email 的所有意見回饋。"""
     cur.execute("DELETE FROM feedback WHERE email = %s", (email,))
     return cur.rowcount

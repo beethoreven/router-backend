@@ -1,4 +1,4 @@
-"""管理後台的 API(SPEC 第 3 節「管理後台功能」)。
+"""管理後台的 API。
 
 除了 /api/admin/login,每一支都掛 require_admin。寫入一律只取白名單欄位
 (datasets.py、app_config.py、feedback.py),不把請求內容直接交給資料庫。
@@ -56,7 +56,7 @@ def _edit_error(exc):
 @bp.post("/login")
 def login():
     """用 Google 登入換一張後台 session。不是管理員回 403,而且什麼都不存
-    (一般使用者在網站登入沒有作用,SPEC 第 13 節「網站」)。"""
+    (一般使用者在網站登入沒有作用)。"""
     if not admin.enabled():
         return _error(503, "not_configured", "後端還沒設定 SESSION_SECRET")
     body = _body()

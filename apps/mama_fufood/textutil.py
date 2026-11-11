@@ -10,7 +10,7 @@ _VERSION = _re.compile(r"^(\d{1,2})\.(\d{1,2})\.(\d)$")
 def parse_version(text: object) -> tuple[int, int, int] | None:
     """App 版本 x.y.z → (x, y, z);格式不對回 None。
 
-    範圍照 SPEC 第 2 節的版本號規則:x、y 最大 99,z 最大 9(Play 版本碼 = x×1000 + y×10 + z)。
+    x、y 最大 99,z 最大 9:Play 的版本碼是 x×1000 + y×10 + z,z 超過 9 就會和下一個 y 撞號。
     """
     if not isinstance(text, str):
         return None

@@ -177,7 +177,7 @@ def _seed(cur, dataset: str) -> None:
 
 
 def _sync_formats(cur) -> None:
-    """匯出格式的欄位定義跟著程式發布(SPEC 第 3 節第 6 項):部署時自動寫入,後台只能看。
+    """匯出格式的欄位定義跟著程式發布:部署時自動寫入,後台只能看。
 
     程式裡已經沒有的格式版本(例如上架前把第 1 版改稱第 0 版)從表裡刪掉:這張表只是程式的副本。"""
     cur.execute("DELETE FROM formats WHERE NOT (format_version = ANY(%s))", (list(export_formats.DEFINITIONS),))
@@ -205,7 +205,7 @@ def _create_tables(cur) -> None:
     _sync_formats(cur)
 
 
-# ★ schema_lock 沿用搬過來之前的字串:切換期間舊服務與這裡連同一個資料庫,兩邊要排同一把鎖。
+# ★ schema_lock 不能改:連同一個資料庫的其他行程(例如重疊的部署)要排同一把鎖,建表才不會互撞。
 database = Database(
     "mama-fufood",
     url=lambda: config.get().database_url,

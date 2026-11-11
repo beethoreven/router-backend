@@ -26,7 +26,7 @@ def test_every_format_version_has_a_sample():
 
 @pytest.mark.parametrize("path", SAMPLES, ids=lambda p: p.stem)
 def test_every_sample_converts_to_latest_and_passes(path):
-    """所有舊樣本一路轉到最新版,並通過最新版的檢查(SPEC 第 4 節「匯入」)。"""
+    """所有舊樣本一路轉到最新版,並通過最新版的檢查。"""
     version = int(path.stem[1:])
     sample = load_sample(version)
     assert export_formats.validate(sample, version) == []

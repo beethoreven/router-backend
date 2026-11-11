@@ -1,4 +1,4 @@
-"""意見回饋(SPEC 第 10 節)。"""
+"""意見回饋。"""
 
 from __future__ import annotations
 

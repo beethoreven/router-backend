@@ -1,8 +1,8 @@
 """App 用的 API:登入、每日檢查、意見回饋、舊格式轉換。
 
 登入時用 Google ID Token 換一張通行證(auth.app_pass),之後每一支都帶通行證
-(Authorization: Bearer ...)。沒帶或無效的請求直接拒絕:不扣額度、不碰資料庫
-(SPEC 第 3 節第 3 項)。連不上 Google 時回 503(shared.flask_app),App 保持登入、晚點再試。
+(Authorization: Bearer ...)。沒帶或無效的請求直接拒絕:不扣額度、不碰資料庫。
+連不上 Google 時回 503(shared.flask_app),App 保持登入、晚點再試。
 """
 
 from __future__ import annotations
@@ -30,7 +30,7 @@ bp = Blueprint("public", __name__)
 
 # 每日檢查的內容很小(版本號而已),上限給 16 KB。
 CHECK_MAX_BYTES = 16 * 1024
-# 意見回饋:附件壓縮後最多 1 MiB(SPEC 第 10 節「上傳上限」),base64 之後約 1.4 MB,
+# 意見回饋:附件壓縮後最多 1 MiB,base64 之後約 1.4 MB,
 # 再加上描述與快照。伺服器解壓上限 4 MiB,超過就拒絕(防壓縮炸彈)。
 FEEDBACK_MAX_BODY = 1_600_000
 ATTACHMENT_MAX_COMPRESSED = 1024 * 1024
@@ -119,11 +119,11 @@ def _parse_datasets(raw) -> dict | None:
 
 @bp.post("/api/v1/check")
 def check():
-    """每日檢查(SPEC 第 3 節第 2 項):回傳最低可用 App 版本,以及每個資料集是
+    """每日檢查:回傳最低可用 App 版本,以及每個資料集是
     「已是最新」「有新資料(附內容)」「需要新版 App」三種之一。一次請求算一次額度。
 
     請求內容(登入憑證、App 版本、支援的格式版本、各資料集版本)只用來決定回應,
-    用完不存;記憶體裡只留當天的次數(SPEC 第 3 節第 4 項)。
+    用完不存;記憶體裡只留當天的次數。
     """
     try:
         body = payload.read_json(request, CHECK_MAX_BYTES)
@@ -251,7 +251,7 @@ def _parse_feedback(body) -> dict:
 
 @bp.post("/api/v1/feedback")
 def submit_feedback():
-    """收一則意見回饋(SPEC 第 10 節)。重送同一個編號回 200 duplicate,不重複扣額度。"""
+    """收一則意見回饋。重送同一個編號回 200 duplicate,不重複扣額度。"""
     try:
         body = payload.read_json(request, FEEDBACK_MAX_BODY)
     except payload.PayloadError as exc:
@@ -313,7 +313,7 @@ def _gzip_json(data: dict, status: int = 200):
 
 @bp.post("/api/v1/convert")
 def convert():
-    """把舊格式的 data.json 逐版轉到最新格式(SPEC 第 4 節「匯入」)。
+    """把舊格式的 data.json 逐版轉到最新格式(匯入舊的匯出檔時用)。
 
     ★ 無狀態:轉換前後都不保存、不記錄內容(「寶寶資料不上伺服器」的唯一例外,條款與隱私權政策都有寫)。
       這支函式不寫任何包含內容的日誌;出錯時只回錯誤代碼。

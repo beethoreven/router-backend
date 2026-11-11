@@ -1,4 +1,4 @@
-"""每日檢查(SPEC 第 3 節第 2~4 項)。"""
+"""每日檢查。"""
 
 from __future__ import annotations
 
