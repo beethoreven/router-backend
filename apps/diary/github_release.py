@@ -100,6 +100,38 @@ class _Hasher:
             raise UploadError("解壓後不是字體檔（OTF/TTF）")
 
 
+class _Body:
+    """The request body: reads `length` bytes from the incoming upload, checking and hashing them on
+    the way. A file-like object with a length, so requests sends a plain Content-Length body."""
+
+    def __init__(self, stream, length: int, hasher: "_Hasher") -> None:
+        self._stream = stream
+        self._remaining = length
+        self._length = length
+        self._hasher = hasher
+        self.failure: UploadError | None = None
+
+    def __len__(self) -> int:
+        return self._length
+
+    def read(self, size: int = -1) -> bytes:
+        if self._remaining <= 0:
+            return b""
+        want = self._remaining if size is None or size < 0 else min(size, self._remaining)
+        chunk = self._stream.read(min(want, CHUNK))
+        if not chunk:
+            # The browser stopped sending early: stop, so GitHub isn't left waiting for the rest.
+            self.failure = UploadError("檔案沒有完整傳到後端，請重新上傳")
+            raise self.failure
+        self._remaining -= len(chunk)
+        try:
+            self._hasher.feed(chunk)
+        except UploadError as exc:
+            self.failure = exc
+            raise
+        return chunk
+
+
 def upload(stream, length: int, font_id: int, repo: str, token: str) -> dict:
     """Uploads `length` bytes from `stream` as a new release asset. Returns the info fonts.set_file() takes."""
     if not repo or not token:
@@ -109,30 +141,22 @@ def upload(stream, length: int, font_id: int, repo: str, token: str) -> dict:
     release = _release_id(repo, token)
     hasher = _Hasher()
     name = f"font-{font_id}-{secrets.token_hex(4)}.otf.gz"
-    failure: list[UploadError] = []
-
-    def chunks() -> Iterator[bytes]:
-        remaining = length
-        while remaining > 0:
-            chunk = stream.read(min(CHUNK, remaining))
-            if not chunk:
-                break
-            remaining -= len(chunk)
-            try:
-                hasher.feed(chunk)
-            except UploadError as exc:
-                failure.append(exc)
-                return  # stop sending; GitHub sees a short body and rejects it
-            yield chunk
-
-    headers = {**_headers(token), "Content-Type": "application/gzip", "Content-Length": str(length)}
+    body = _Body(stream, length, hasher)
+    # No Content-Length header here: requests takes it from len(body). Passing a generator with an
+    # explicit Content-Length made requests add "Transfer-Encoding: chunked" as well, and GitHub drops
+    # a request carrying both (seen as 「傳到 GitHub 時連線失敗」 on the first real upload).
+    headers = {**_headers(token), "Content-Type": "application/gzip"}
     try:
         resp = requests.post(f"{UPLOADS}/repos/{repo}/releases/{release}/assets", params={"name": name},
-                             headers=headers, data=chunks(), timeout=(20, 600))
+                             headers=headers, data=body, timeout=(20, 600))
+    except UploadError:
+        raise  # the file failed a check part-way: sending stopped there
     except requests.RequestException as exc:
-        if failure:
-            raise failure[0] from exc
+        if body.failure:
+            raise body.failure from exc
+        log.warning("font %s upload to GitHub failed: %r", font_id, exc)
         raise UploadError("傳到 GitHub 時連線失敗，請再試一次", 502) from exc
+    failure = [body.failure] if body.failure else []
     if failure:
         _delete_asset(resp, repo, token)
         raise failure[0]
