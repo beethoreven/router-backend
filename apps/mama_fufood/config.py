@@ -1,8 +1,8 @@
-"""媽媽記副食品的設定,只在啟動時從 FUFOOD__* 環境變數讀一次(經由 AppSettings)。
+"""媽媽記副食品的設定,只在啟動時從 MAMA_FUFOOD__* 環境變數讀一次(經由 AppSettings)。
 
 其他模組一律用 `config.get()` 取值,不讀 os.environ。create_app() 在第一個請求之前設好,
 背景執行緒(公用資料快取的載入)讀的也是這一份,所以放在模組裡而不是請求裡。
-一個行程只有一個 fufood app,所以只有一份。
+一個行程只有一個 mama-fufood app,所以只有一份。
 """
 
 from __future__ import annotations

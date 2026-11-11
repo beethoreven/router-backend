@@ -12,7 +12,7 @@
 
 ## 資料表
 
-    admins            管理員白名單(第一位管理員另由環境變數 FUFOOD__FIRST_ADMIN_EMAIL 指定)
+    admins            管理員白名單(第一位管理員另由環境變數 MAMA_FUFOOD__FIRST_ADMIN_EMAIL 指定)
     sessions          管理後台的登入 session
     food_groups       分組(後台編輯中的版本,也就是草稿)
     foods             食材(草稿)
@@ -207,7 +207,7 @@ def _create_tables(cur) -> None:
 
 # ★ schema_lock 沿用搬過來之前的字串:切換期間舊服務與這裡連同一個資料庫,兩邊要排同一把鎖。
 database = Database(
-    "fufood",
+    "mama-fufood",
     url=lambda: config.get().database_url,
     schema=_create_tables,
     schema_lock="mama-fufood:schema",

@@ -6,9 +6,9 @@ import copy
 import gzip
 import json
 
-from apps.fufood import export_formats
-from apps.fufood import routes as public
-from tests.fufood.conftest import bearer, gz, load_sample
+from apps.mama_fufood import export_formats
+from apps.mama_fufood import routes as public
+from tests.mama_fufood.conftest import bearer, gz, load_sample
 
 CUR = export_formats.CURRENT
 NEXT = CUR + 1

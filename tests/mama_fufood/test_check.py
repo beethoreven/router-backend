@@ -6,11 +6,11 @@ import dataclasses
 
 import pytest
 
-from apps.fufood import config
-from apps.fufood import db as fufood_db
-from apps.fufood import routes as public
-from apps.fufood import cache
-from tests.fufood.conftest import admin_headers, bearer, load_seed
+from apps.mama_fufood import config
+from apps.mama_fufood import db as app_db
+from apps.mama_fufood import routes as public
+from apps.mama_fufood import cache
+from tests.mama_fufood.conftest import admin_headers, bearer, load_seed
 
 
 
@@ -84,7 +84,7 @@ def test_not_ready_does_not_count(client, monkeypatch):
     client.get("/ready")  # 先讓 app 載入(設定在載入時才設好)
     monkeypatch.setattr(config, "_current",
                         dataclasses.replace(config.get(), database_url="postgresql://127.0.0.1:1/nothing"))
-    fufood_db.database.reset_for_tests()
+    app_db.database.reset_for_tests()
     cache.public.reset_for_tests()
     resp = client.post("/api/v1/check", json=_body(), headers=bearer())
     assert resp.status_code == 503
@@ -107,7 +107,7 @@ def test_check_never_touches_the_database_once_cached(client, db, monkeypatch):
         raise AssertionError("每日檢查不應該碰資料庫")
 
     monkeypatch.setattr(cache.public, "_load", boom)
-    monkeypatch.setattr(fufood_db.database, "connection", boom)
+    monkeypatch.setattr(app_db.database, "connection", boom)
     assert client.post("/api/v1/check", json=_body(), headers=bearer()).status_code == 200
 
 

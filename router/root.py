@@ -28,7 +28,7 @@ from router.dispatcher import LazyApp, Mount, build_mounts
 # environment-variable prefix (see router/settings.py).
 MOUNTS: tuple[Mount, ...] = (
     Mount("diary", "apps.diary.app:create_app"),
-    Mount("fufood", "apps.fufood.app:create_app"),
+    Mount("mama-fufood", "apps.mama_fufood.app:create_app"),
 )
 
 

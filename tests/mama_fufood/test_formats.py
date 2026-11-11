@@ -7,8 +7,8 @@ from pathlib import Path
 
 import pytest
 
-from apps.fufood import export_formats
-from tests.fufood.conftest import load_sample
+from apps.mama_fufood import export_formats
+from tests.mama_fufood.conftest import load_sample
 
 CUR = export_formats.CURRENT
 

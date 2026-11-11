@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from tests.fufood.conftest import admin_headers, bearer, load_seed
+from tests.mama_fufood.conftest import admin_headers, bearer, load_seed
 
 
 

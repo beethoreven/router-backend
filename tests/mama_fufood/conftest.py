@@ -3,7 +3,7 @@
 - 要資料庫的測試用 `db` fixture(底下是 tests/conftest.py 的 empty_database:TEST_DATABASE_URL
   沒設就跳過)。**不要拿正式的資料庫來跑**:每次都會把整個 public schema 清空。
 - Google 的 ID token 驗證換成假的:`tok:<sub>:<email>` 這種字串會被當成驗證通過。
-- `client` 是整個服務(router)的測試用戶端,路徑自動加上 /fufood,測試裡照舊寫 /api/...。
+- `client` 是整個服務(router)的測試用戶端,路徑自動加上 /mama-fufood,測試裡照舊寫 /api/...。
 """
 
 from __future__ import annotations
@@ -16,20 +16,20 @@ import pytest
 
 from tests.conftest import TEST_DATABASE_URL
 
-APP_DIR = Path(__file__).resolve().parents[2] / "apps" / "fufood"
-PREFIX = "/fufood"
+APP_DIR = Path(__file__).resolve().parents[2] / "apps" / "mama_fufood"
+PREFIX = "/mama-fufood"
 
-FUFOOD_ENV = {
-    "FUFOOD__GOOGLE_CLIENT_ID": "test-client-id.apps.googleusercontent.com",
-    "FUFOOD__SESSION_SECRET": "test-session-secret",
-    "FUFOOD__FIRST_ADMIN_EMAIL": "admin@example.com",
-    "FUFOOD__ALLOWED_ORIGINS": "http://localhost:8003",
-    "FUFOOD__START_CACHE_LOADER": "0",
+MAMA_FUFOOD_ENV = {
+    "MAMA_FUFOOD__GOOGLE_CLIENT_ID": "test-client-id.apps.googleusercontent.com",
+    "MAMA_FUFOOD__SESSION_SECRET": "test-session-secret",
+    "MAMA_FUFOOD__FIRST_ADMIN_EMAIL": "admin@example.com",
+    "MAMA_FUFOOD__ALLOWED_ORIGINS": "http://localhost:8003",
+    "MAMA_FUFOOD__START_CACHE_LOADER": "0",
 }
 
 
 def fake_verify(token, client_id):
-    assert client_id == FUFOOD_ENV["FUFOOD__GOOGLE_CLIENT_ID"]
+    assert client_id == MAMA_FUFOOD_ENV["MAMA_FUFOOD__GOOGLE_CLIENT_ID"]
     if not isinstance(token, str) or not token.startswith("tok:"):
         return None
     _, sub, email = token.split(":", 2)
@@ -41,7 +41,7 @@ def bearer(sub: str = "user-1", email: str = "mom@example.com") -> dict:
 
 
 class PrefixedClient:
-    """路徑自動加上 /fufood 的測試用戶端(其他行為照 Flask 的 test client)。"""
+    """路徑自動加上 /mama-fufood 的測試用戶端(其他行為照 Flask 的 test client)。"""
 
     def __init__(self, client):
         self.raw = client
@@ -58,7 +58,7 @@ class PrefixedClient:
 
 
 def _reset_memory():
-    from apps.fufood import admin_routes, auth, cache, db, routes
+    from apps.mama_fufood import admin_routes, auth, cache, db, routes
 
     db.database.reset_for_tests()
     cache.public.reset_for_tests()
@@ -70,23 +70,23 @@ def _reset_memory():
 
 
 @pytest.fixture
-def fufood_env():
-    env = dict(FUFOOD_ENV)
+def mama_fufood_env():
+    env = dict(MAMA_FUFOOD_ENV)
     if TEST_DATABASE_URL:
-        env["FUFOOD__DATABASE_URL"] = TEST_DATABASE_URL
+        env["MAMA_FUFOOD__DATABASE_URL"] = TEST_DATABASE_URL
     return env
 
 
 @pytest.fixture
-def service(monkeypatch, fufood_env):
-    """整個服務(只掛 fufood)。"""
+def service(monkeypatch, mama_fufood_env):
+    """整個服務(只掛 mama-fufood)。"""
     from router.dispatcher import Mount
     from router.root import build
     from shared import google_auth
 
     monkeypatch.setattr(google_auth, "verify", fake_verify)
     _reset_memory()
-    yield build(mounts=(Mount("fufood", "apps.fufood.app:create_app"),), environ=fufood_env)
+    yield build(mounts=(Mount("mama-fufood", "apps.mama_fufood.app:create_app"),), environ=mama_fufood_env)
     _reset_memory()
 
 
@@ -115,9 +115,9 @@ def admin_headers(token: str) -> dict:
 
 
 def pass_headers(sub: str = "user-1", email: str = "mom@example.com", now: float | None = None) -> dict:
-    from apps.fufood.auth import app_pass
+    from apps.mama_fufood.auth import app_pass
 
-    token, _ = app_pass.issue(FUFOOD_ENV["FUFOOD__SESSION_SECRET"], sub, email, now=now)
+    token, _ = app_pass.issue(MAMA_FUFOOD_ENV["MAMA_FUFOOD__SESSION_SECRET"], sub, email, now=now)
     return {"Authorization": f"Bearer {token}"}
 
 

@@ -10,8 +10,8 @@ import uuid
 
 import pytest
 
-from apps.fufood import config
-from tests.fufood.conftest import admin_headers, bearer
+from apps.mama_fufood import config
+from tests.mama_fufood.conftest import admin_headers, bearer
 
 
 
@@ -112,16 +112,16 @@ def test_delete_by_email(client, admin_token):
 
 def test_attempts_are_capped_in_memory_before_the_database(client, db, monkeypatch):
     """登入了也不能無限次叫醒資料庫:超過嘗試次數就在記憶體擋下。"""
-    from apps.fufood import routes as public
+    from apps.mama_fufood import routes as public
     monkeypatch.setattr(public, "FEEDBACK_ATTEMPTS_PER_DAY", 2)
     public.feedback_attempts.clear()
     public.feedback_attempts._limit = lambda: public.FEEDBACK_ATTEMPTS_PER_DAY
     for _ in range(2):
         client.post("/api/v1/feedback", json=_feedback(), headers=bearer())
-    from apps.fufood import db as fufood_db
+    from apps.mama_fufood import db as app_db
 
     def boom(*_a, **_k):
         raise AssertionError("超過嘗試次數後不應該碰資料庫")
 
-    monkeypatch.setattr(fufood_db.database, "connection", boom)
+    monkeypatch.setattr(app_db.database, "connection", boom)
     assert client.post("/api/v1/feedback", json=_feedback(), headers=bearer()).status_code == 429

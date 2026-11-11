@@ -1,4 +1,4 @@
-"""掛在 router 底下的 fufood:/ready、CORS、登入通行證、連不上 Google 的情況。"""
+"""掛在 router 底下的 mama-fufood:/ready、CORS、登入通行證、連不上 Google 的情況。"""
 
 from __future__ import annotations
 
@@ -6,14 +6,14 @@ import time
 
 import pytest
 
-from apps.fufood import cache
-from apps.fufood import db as fufood_db
-from apps.fufood.auth import admin, app_pass
+from apps.mama_fufood import cache
+from apps.mama_fufood import db as app_db
+from apps.mama_fufood.auth import admin, app_pass
 from shared import google_auth
-from tests.fufood.conftest import FUFOOD_ENV, bearer, pass_headers
+from tests.mama_fufood.conftest import MAMA_FUFOOD_ENV, bearer, pass_headers
 
 DAY = 24 * 60 * 60
-SECRET = FUFOOD_ENV["FUFOOD__SESSION_SECRET"]
+SECRET = MAMA_FUFOOD_ENV["MAMA_FUFOOD__SESSION_SECRET"]
 
 
 def _boom(*_a, **_k):
@@ -23,19 +23,19 @@ def _boom(*_a, **_k):
 # ── /ready 與 router ──────────────────────────────────────────
 
 def test_router_health_never_loads_or_touches_the_database(service, monkeypatch):
-    monkeypatch.setattr(fufood_db.database, "connection", _boom)
+    monkeypatch.setattr(app_db.database, "connection", _boom)
     resp = service.test_client().get("/health")
     assert resp.status_code == 200 and resp.get_json()["ok"] is True
 
 
-def test_router_ready_reports_fufood_loaded(service):
+def test_router_ready_reports_the_app_loaded(service):
     resp = service.test_client().get("/ready")
-    assert resp.get_json()["apps"]["fufood"]["loaded"] is True
+    assert resp.get_json()["apps"]["mama-fufood"]["loaded"] is True
 
 
 def test_ready_never_touches_the_database(client, monkeypatch):
-    """/fufood/ready 不需要登入,所以不能碰資料庫(否則任何人都能讓 Neon 一直醒著)。"""
-    monkeypatch.setattr(fufood_db.database, "connection", _boom)
+    """/mama-fufood/ready 不需要登入,所以不能碰資料庫(否則任何人都能讓 Neon 一直醒著)。"""
+    monkeypatch.setattr(app_db.database, "connection", _boom)
     resp = client.get("/ready")
     assert resp.status_code == 503
     assert "database_configured" in resp.get_json()
@@ -49,7 +49,7 @@ def test_ready_after_cache_loads(client, db):
 
 
 def test_no_health_of_its_own(client):
-    """保活打的是 router 的 /health,fufood 自己不定義。"""
+    """保活打的是 router 的 /health,mama-fufood 自己不定義。"""
     assert client.get("/health").status_code == 404
 
 
@@ -70,19 +70,19 @@ def test_cors_only_for_the_admin_site(client):
     assert "Access-Control-Allow-Origin" not in resp.headers
 
 
-def test_loader_starts_on_first_request_not_at_load(fufood_env, monkeypatch):
+def test_loader_starts_on_first_request_not_at_load(mama_fufood_env, monkeypatch):
     """背景載入要等第一個請求才開始,載入 app 時不能開執行緒。"""
     from router.dispatcher import Mount
     from router.root import build
 
     calls = []
     monkeypatch.setattr(cache.public, "start_background_loader", lambda: calls.append(1))
-    env = {**fufood_env, "FUFOOD__START_CACHE_LOADER": "1"}
-    service = build(mounts=(Mount("fufood", "apps.fufood.app:create_app"),), environ=env)
+    env = {**mama_fufood_env, "MAMA_FUFOOD__START_CACHE_LOADER": "1"}
+    service = build(mounts=(Mount("mama-fufood", "apps.mama_fufood.app:create_app"),), environ=env)
     client = service.test_client()
-    client.get("/ready")  # 只載入 app,不經過 fufood 的 before_request
+    client.get("/ready")  # 只載入 app,不經過 mama-fufood 的 before_request
     assert calls == []
-    client.get("/fufood/ready")
+    client.get("/mama-fufood/ready")
     assert calls == [1]
 
 

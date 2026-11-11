@@ -1,10 +1,10 @@
-"""媽媽記副食品的後端,掛在 /fufood 底下。
+"""媽媽記副食品的後端,掛在 /mama-fufood 底下。
 
 寶寶的名稱與紀錄只在手機與使用者自己的 Google Drive,這個後端不保存。它提供:
 - routes.py:登入(Google ID Token 換通行證)、每日檢查、意見回饋、舊格式轉換。
 - admin_routes.py:管理後台(公用資料、App 版本設定、意見回饋、管理員)。
 
-設定:FUFOOD__* 環境變數(config.py)。登入、資料庫、錯誤處理與各種上限用 shared/
+設定:MAMA_FUFOOD__* 環境變數(config.py)。登入、資料庫、錯誤處理與各種上限用 shared/
 (auth.py 與 db.py 寫了用哪些)。
 
 ★ 建 app 時不開執行緒、不對外連線:公用資料快取的背景載入,等第一個請求進來才在 worker 裡開始
@@ -34,7 +34,7 @@ def create_app(settings: AppSettings):
     cfg = config.FufoodConfig.from_settings(settings)
     config.set_current(cfg)
     if not cfg.database_url:
-        log.warning("FUFOOD__DATABASE_URL is not set: public data can't load and /fufood/ready stays 503")
+        log.warning("MAMA_FUFOOD__DATABASE_URL is not set: public data can't load and /mama-fufood/ready stays 503")
 
     app = new_app(__name__, max_content_length=MAX_CONTENT_LENGTH)
     # 只有管理後台需要跨來源(網頁在 GitHub Pages);App 的請求不是瀏覽器發的,不受 CORS 影響。
