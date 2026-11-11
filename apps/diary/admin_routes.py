@@ -10,11 +10,15 @@ import json
 
 from flask import Blueprint, g, jsonify, request
 
-from . import access, admins, app_config, cache, config, db, fonts, github_release, google_auth, payload, \
-    rejections, sessions
+from shared import google_auth, payload
+from shared.admin_auth import normalize_email
+from shared.quota import DailyCounter
+
+from . import app_config, cache, config, db, fonts, github_release
 from . import feedback as feedback_db
-from .access import require_admin
-from .quota import DailyCounter
+from .auth import admin, rejections
+
+require_admin = admin.require_admin
 
 bp = Blueprint("diary_admin", __name__, url_prefix="/api/admin")
 
@@ -43,15 +47,10 @@ def _edit(fn, *args):
 
 def _reload_cache() -> bool:
     try:
-        cache.reload()
+        cache.public.reload()
         return True
     except Exception:  # noqa: BLE001 — already written; the background loader or "reload" fixes it later
         return False
-
-
-@bp.errorhandler(payload.PayloadError)
-def _payload_error(exc):
-    return _error(exc.status, exc.code, str(exc))
 
 
 @bp.errorhandler(app_config.ConfigError)
@@ -71,7 +70,7 @@ def _upload_error(exc):
 def login():
     """Google sign-in → an admin session. A non-admin gets 403 and nothing is stored."""
     cfg = config.get()
-    if not sessions.enabled() or not cfg.google_client_id:
+    if not admin.enabled() or not cfg.google_client_id:
         return _error(503, "not_configured", "後端還沒設定登入")
     body = _body()
     claims = google_auth.verify(body.get("credential"), cfg.google_client_id)
@@ -83,21 +82,21 @@ def login():
         return _error(429, "too_many", "登入嘗試太多次，明天再試")
     with db.connection() as conn:
         with conn.cursor() as cur:
-            if not admins.is_admin(cur, claims["email"]):
+            if not admin.admins.is_admin(cur, claims["email"]):
                 return _error(403, "forbidden", "這個帳號不是管理員")
-            sessions.purge_expired(cur)
-            token = sessions.create(cur, claims["email"])
+            admin.sessions.purge_expired(cur)
+            token = admin.sessions.create(cur, claims["email"])
     return jsonify({"token": token, "email": claims["email"]})
 
 
 @bp.post("/logout")
 def logout():
     token = google_auth.extract_bearer_token(request)
-    if sessions.looks_valid(token):
+    if admin.sessions.looks_valid(token):
         with db.connection() as conn:
             with conn.cursor() as cur:
-                sessions.delete(cur, token)
-    access.forget(token)
+                admin.sessions.delete(cur, token)
+    admin.forget(token)
     return jsonify({"ok": True})
 
 
@@ -133,7 +132,7 @@ def overview():
 @bp.post("/cache/reload")
 @require_admin
 def reload_cache():
-    cache.reload()
+    cache.public.reload()
     return jsonify(cache.status())
 
 
@@ -266,7 +265,7 @@ def delete_feedback(feedback_id):
 @require_admin
 def delete_feedback_by_email():
     """A personal-data deletion request: delete every report from one e-mail address."""
-    email = admins.normalize(_body().get("email"))
+    email = normalize_email(_body().get("email"))
     if email is None:
         return _error(400, "invalid", "Email 格式不對")
     return jsonify({"deleted": _edit(feedback_db.delete_by_email, email)})
@@ -277,28 +276,28 @@ def delete_feedback_by_email():
 @bp.get("/admins")
 @require_admin
 def list_admins():
-    return jsonify({"admins": _edit(admins.list_all)})
+    return jsonify({"admins": _edit(admin.admins.list_all)})
 
 
 @bp.post("/admins")
 @require_admin
 def add_admin():
     body = _body()
-    email = admins.normalize(body.get("email"))
+    email = normalize_email(body.get("email"))
     note = body.get("note", "")
     if email is None:
         return _error(400, "invalid", "Email 格式不對")
     if not isinstance(note, str) or len(note) > 100:
         return _error(400, "invalid", "備註要是 100 字以內的文字")
-    _edit(admins.add, email, note.strip(), g.admin_email)
-    access.forget_all()
+    _edit(admin.admins.add, email, note.strip(), g.admin_email)
+    admin.forget_all()
     return jsonify({"ok": True}), 201
 
 
 @bp.delete("/admins/<path:email>")
 @require_admin
 def remove_admin(email: str):
-    email = admins.normalize(email)
+    email = normalize_email(email)
     if email is None:
         return _error(400, "invalid", "Email 格式不對")
     if email == config.get().first_admin_email:
@@ -307,10 +306,10 @@ def remove_admin(email: str):
         return _error(400, "invalid", "不能移除自己")
 
     def _remove(cur):
-        removed = admins.remove(cur, email)
-        sessions.delete_for_email(cur, email)
+        removed = admin.admins.remove(cur, email)
+        admin.sessions.delete_for_email(cur, email)
         return removed
 
     removed = _edit(_remove)
-    access.forget_all()
+    admin.forget_all()
     return jsonify({"ok": True}) if removed else _error(404, "not_found", "這個 Email 不在名單裡")

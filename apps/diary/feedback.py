@@ -9,8 +9,9 @@
 
 from __future__ import annotations
 
+from shared import timeutil
+
 from . import config
-from . import textutil as timeutil
 
 STATUSES = ("new", "in_progress", "done", "wont_fix")
 KINDS = ("suggestion", "problem")

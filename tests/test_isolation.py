@@ -6,6 +6,9 @@
 2. Importing another app (`apps.other…`).
 3. Reading the environment directly (os.environ / os.getenv): settings come only through the
    AppSettings that router/settings.py builds, with the app's prefix.
+4. shared/ importing an app or reading the environment, or keeping state at module level: anything
+   mutable there would be one copy for every app (one app's cache answering for another). Only the
+   names in PROCESS_WIDE may hold module-level state, each for a reason written next to it.
 """
 
 from __future__ import annotations
@@ -16,6 +19,13 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 APPS = ROOT / "apps"
+SHARED = ROOT / "shared"
+
+# Module-level state in shared/ that is deliberately one copy for the whole process.
+PROCESS_WIDE = {
+    ("google_auth.py", "_google_request"),  # cache of Google's public keys: the same keys for every app
+    ("database.py", "_process_slots"),      # the process-wide connection cap across all apps
+}
 
 
 def _app_dirs():
@@ -81,3 +91,58 @@ def test_the_checker_catches_each_mistake(tmp_path, monkeypatch):
     assert any("bare import" in p for p in found)
     assert any("another app" in p for p in found)
     assert any("os.environ" in p for p in found)
+
+
+def _shared_problems(shared_dir: Path) -> list[str]:
+    problems = []
+    for path in shared_dir.rglob("*.py"):
+        rel = path.relative_to(ROOT)
+        tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        for node in ast.walk(tree):
+            modules = []
+            if isinstance(node, ast.Import):
+                modules = [a.name for a in node.names]
+            elif isinstance(node, ast.ImportFrom) and node.level == 0 and node.module:
+                modules = [node.module]
+            for mod in modules:
+                if mod.split(".")[0] == "apps":
+                    problems.append(f"{rel}:{node.lineno} shared code imports an app '{mod}'")
+            if isinstance(node, ast.Attribute) and node.attr in ("environ", "getenv"):
+                if isinstance(node.value, ast.Name) and node.value.id == "os":
+                    problems.append(f"{rel}:{node.lineno} reads os.{node.attr}; take the value as a parameter")
+            if isinstance(node, (ast.Global, ast.Nonlocal)):
+                problems.append(f"{rel}:{node.lineno} '{type(node).__name__.lower()}' in shared code")
+        for node in tree.body:
+            targets = []
+            if isinstance(node, ast.Assign):
+                targets = [t.id for t in node.targets if isinstance(t, ast.Name)]
+            elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
+                targets = [node.target.id]
+            for name in targets:
+                constant = name.isupper() or name.lstrip("_").isupper()
+                if constant or name == "log" or (path.name, name) in PROCESS_WIDE:
+                    continue
+                problems.append(f"{rel}:{node.lineno} module-level '{name}' in shared code; keep state in an object "
+                                f"each app creates (or add it to PROCESS_WIDE with the reason)")
+    return problems
+
+
+def test_shared_code_imports_no_app_reads_no_environment_and_keeps_no_state():
+    problems = _shared_problems(SHARED)
+    assert problems == [], "\n".join(problems)
+
+
+def test_the_shared_checker_catches_each_mistake(tmp_path, monkeypatch):
+    bad = tmp_path / "shared"
+    bad.mkdir()
+    (bad / "__init__.py").write_text("")
+    (bad / "thing.py").write_text(
+        "import os\nimport apps.diary.db\n_cache = {}\nLIMIT = 3\n"
+        "def f():\n    global _cache\n    return os.environ['X']\n")
+    monkeypatch.setattr(sys.modules[__name__], "ROOT", tmp_path)
+    found = _shared_problems(bad)
+    assert any("imports an app" in p for p in found)
+    assert any("os.environ" in p for p in found)
+    assert any("'_cache'" in p for p in found)
+    assert any("'global'" in p for p in found)
+    assert not any("'LIMIT'" in p for p in found)

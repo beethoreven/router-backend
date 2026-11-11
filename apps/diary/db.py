@@ -1,46 +1,19 @@
-"""Database access (Neon Postgres): one connection per call, capped by a semaphore (mama-fufood's
-db/connection.py), plus the schema, created on the first connection of each process.
+"""The diary's database (Neon Postgres): its tables, and its shared.database.Database.
 
     with db.connection() as conn:
         with conn.cursor() as cur:
             ...
 
-Commits on normal exit, rolls back on an exception, always closes.
-
-Why no connection pool: on Render's free plan a frozen container left psycopg's pool workers dead
-after waking (group-judge, 2026-08), and a pool keeps connections open, which keeps Neon awake.
-The daily check never touches the database (cache.py), so connections are rare.
-
-★ The schema is created under a Postgres advisory lock: a process-local lock can't stop two
-  processes (an overlapping deploy) from running the DDL at once (known-issue-check #27).
+Connection handling (one connection per call, per-app and process-wide caps, timeouts, schema created
+once under an advisory lock) is shared.database. The daily check never touches the database (cache.py),
+so connections are rare.
 """
 
 from __future__ import annotations
 
-import threading
-import time
-from contextlib import contextmanager
-
-import psycopg
+from shared.database import Database
 
 from . import config
-
-_MAX_CONCURRENT = 5
-_SLOT_WAIT = 10
-_CONNECT_TIMEOUT = 8
-
-_slots = threading.BoundedSemaphore(_MAX_CONCURRENT)
-# Last successful connection (UTC seconds), reported without connecting just to report it.
-last_ok: float | None = None
-
-
-class DatabaseBusy(Exception):
-    """All connection slots are taken and none freed up in time."""
-
-
-class DatabaseNotConfigured(Exception):
-    """DIARY__DATABASE_URL is not set."""
-
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS admins (
@@ -109,54 +82,22 @@ CREATE INDEX IF NOT EXISTS feedback_received_idx ON feedback (received_at DESC);
 CREATE INDEX IF NOT EXISTS feedback_email_idx ON feedback (email, received_at);
 """
 
-_schema_lock = threading.Lock()
-_schema_done = False
+
+def _create_tables(cur) -> None:
+    cur.execute(SCHEMA)
+    cur.execute("INSERT INTO app_config (id) VALUES (true) ON CONFLICT DO NOTHING")
 
 
-def ensure_schema(conn) -> None:
-    # conn.transaction(), not `with conn:` — psycopg 3 closes the connection at the end of `with conn:`.
-    with conn.transaction():
-        conn.execute("SET LOCAL statement_timeout = 30000")
-        conn.execute("SELECT pg_advisory_xact_lock(hashtext('all-mo-diary:schema'))")
-        with conn.cursor() as cur:
-            cur.execute(SCHEMA)
-            cur.execute("INSERT INTO app_config (id) VALUES (true) ON CONFLICT DO NOTHING")
+database = Database(
+    "diary",
+    url=lambda: config.get().database_url,
+    schema=_create_tables,
+    schema_lock="all-mo-diary:schema",
+    max_connections=5,
+    timeout_seconds=lambda: config.get().db_timeout_seconds,
+)
 
 
-def _ensure_once(conn) -> None:
-    global _schema_done
-    if _schema_done:
-        return
-    with _schema_lock:
-        if not _schema_done:
-            ensure_schema(conn)
-            _schema_done = True
-
-
-def reset_for_tests() -> None:
-    global _schema_done
-    _schema_done = False
-
-
-@contextmanager
 def connection():
-    cfg = config.get()
-    if not cfg.database_url:
-        raise DatabaseNotConfigured("DIARY__DATABASE_URL is not set")
-    if not _slots.acquire(timeout=_SLOT_WAIT):
-        raise DatabaseBusy(f"database connections at the limit ({_MAX_CONCURRENT})")
-    try:
-        # prepare_threshold=None: no server-side prepared statements (Neon's -pooler is transaction mode).
-        conn = psycopg.connect(cfg.database_url, connect_timeout=_CONNECT_TIMEOUT,
-                               tcp_user_timeout=cfg.db_timeout_seconds * 1000, prepare_threshold=None)
-        global last_ok
-        last_ok = time.time()
-        try:
-            _ensure_once(conn)
-            with conn:
-                conn.execute(f"SET LOCAL statement_timeout = {cfg.db_timeout_seconds * 1000:d}")
-                yield conn
-        finally:
-            conn.close()
-    finally:
-        _slots.release()
+    """`with db.connection() as conn:` — tests replace this to prove a path never connects."""
+    return database.connection()

@@ -1,4 +1,6 @@
-"""每人每天的次數上限,只放在記憶體(SPEC 第 3 節第 3 項)。
+"""每人每天的次數上限,只放在記憶體(mama-fufood 與日記共用)。
+
+每個 app 為每一種上限各建一個 DailyCounter,計數不會跨 app。
 
 - 以 Google 帳號的固定編號(sub)計數,不會因為改 Email 而變。
 - 「一天」以台北時間計,午夜清空、只留當天,不寫資料庫也不寫檔案。
@@ -13,7 +15,7 @@ import threading
 from datetime import date
 from typing import Callable
 
-from . import textutil as timeutil
+from shared import timeutil
 
 
 class DailyCounter:

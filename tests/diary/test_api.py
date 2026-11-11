@@ -9,7 +9,7 @@ import uuid
 
 import pytest
 
-from tests.conftest import admin_headers, pass_for
+from tests.diary.conftest import admin_headers, pass_for
 
 CHECK = "/diary/api/v1/check"
 FEEDBACK = "/diary/api/v1/feedback"
@@ -185,6 +185,7 @@ def test_forged_pass_never_touches_the_database(path, monkeypatch, diary_env, db
     from router.root import build
 
     monkeypatch.setattr(db, "connection", lambda: pytest.fail("touched the database"))
+    monkeypatch.setattr(db.database, "connection", lambda: pytest.fail("touched the database"))
     client = build(environ=diary_env).test_client()
     resp = client.post(path, json={}, headers={"Authorization": "Bearer amd1.eyJ2IjoxfQ.forged"})
     assert resp.status_code in (400, 401)

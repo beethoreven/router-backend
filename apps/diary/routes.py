@@ -1,7 +1,7 @@
 """The diary app's API (all under /diary): sign-in exchange, daily check, feedback.
 
 Errors are {"error": message for people, "code": code}. Every call except /api/v1/session carries our
-own app pass (app_tokens.py); a missing or bad pass is rejected before any quota is used or the
+own app pass (auth.app_pass); a missing or bad pass is rejected before any quota is used or the
 database is touched. Adapted from mama-fufood's routes/public.py.
 """
 
@@ -15,11 +15,14 @@ import re
 from flask import Blueprint, jsonify, request
 from psycopg.types.json import Jsonb
 
-from . import app_tokens, cache, config, db, google_auth, payload, rejections
+from shared import google_auth, payload, timeutil
+from shared.quota import DailyCounter
+from shared.textutil import graphemes
+
+from . import cache, config, db
 from . import feedback as feedback_db
-from . import textutil as timeutil
-from .quota import DailyCounter
-from .textutil import graphemes, parse_version
+from .auth import app_pass, rejections
+from .textutil import parse_version
 
 bp = Blueprint("diary_api", __name__)
 
@@ -52,7 +55,7 @@ def authenticate():
     Only our own pass is accepted — never a raw Google ID token. There are no older app versions
     sending ID tokens, so unlike mama-fufood there is no compatibility path to carry.
     """
-    claims = app_tokens.verify(config.get().session_secret, google_auth.extract_bearer_token(request))
+    claims = app_pass.verify(config.get().session_secret, google_auth.extract_bearer_token(request))
     if claims is None:
         rejections.note("invalid pass")
         return None, _error(401, "invalid_token", "登入已過期，請重新登入")
@@ -72,7 +75,7 @@ def session():
     if claims is None:
         rejections.note("invalid Google token")
         return _error(401, "invalid_token", "Google 登入憑證無效或已過期，請重新登入")
-    token, exp = app_tokens.issue(cfg.session_secret, claims["sub"], claims["email"])
+    token, exp = app_pass.issue(cfg.session_secret, claims["sub"], claims["email"])
     return jsonify({"token": token, "expires_at": exp})
 
 
@@ -103,7 +106,7 @@ def check():
             fonts_version is None or (isinstance(fonts_version, str) and len(fonts_version) <= 20)):
         return _error(400, "bad_request", "內容格式不對")
 
-    snap = cache.ensure_loaded()
+    snap = cache.public.ensure_loaded()
     if snap is None:
         # Not loaded yet: "try again later", and the day's quota is not used.
         return _error(503, "not_ready", "暫時無法檢查，請稍後再試")
@@ -132,7 +135,7 @@ def check():
         result["fonts"] = {"status": "updated", "version": release["version"], "content": release["content"]}
     if claims.get("renew"):
         # The pass is over 30 days old: hand out a fresh one, so active users never reach expiry.
-        result["session_token"], result["session_expires_at"] = app_tokens.issue(
+        result["session_token"], result["session_expires_at"] = app_pass.issue(
             config.get().session_secret, claims["sub"], claims["email"])
     return jsonify(result)
 

@@ -14,7 +14,8 @@ from __future__ import annotations
 
 from psycopg.types.json import Jsonb
 
-from .textutil import graphemes, next_stamp
+from shared.textutil import graphemes
+from shared.timeutil import next_stamp
 
 NAME_MAX = 40
 _COLUMNS = ("id", "name", "sort", "disabled", "licensed", "file_name", "download_url", "download_bytes",

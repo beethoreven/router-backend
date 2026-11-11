@@ -1,4 +1,8 @@
-"""讀請求內容的共用工具:大小上限與 gzip 解壓(防壓縮炸彈)。"""
+"""讀請求內容的共用工具:大小上限與 gzip 解壓(防壓縮炸彈)。
+
+每支 API 自己決定上限(read_json 的 max_bytes / max_decompressed);整個 app 的上限是
+shared.flask_app.new_app 的 max_content_length。PayloadError 由 shared.flask_app 統一回成 JSON。
+"""
 
 from __future__ import annotations
 
