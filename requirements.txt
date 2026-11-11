@@ -2,7 +2,6 @@
 # When adding or upgrading a package, try the newest release first; only step back when it really
 # doesn't work, and write down here why. The Python version lives in .python-version (3.15.2).
 #
-# Only what the code uses today is listed; psycopg comes in with the diary's first database endpoint.
 Flask==3.1.3
 Werkzeug==3.1.9
 gunicorn==27.0.0
@@ -13,3 +12,9 @@ google-auth==2.62.1
 # Google's Cache-Control header instead (same as mama-fufood / group-judge).
 cachecontrol==0.14.4
 requests==2.34.2
+# The diary's database (Neon Postgres). Each request opens its own connection (apps/diary/db.py).
+psycopg[binary]==3.3.8
+# CORS for the admin console on GitHub Pages (only /diary/api/admin/*).
+Flask-Cors==6.0.5
+# Counting characters the way people do (an emoji is one): `\X` grapheme clusters.
+regex==2026.11.9

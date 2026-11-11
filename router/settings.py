@@ -43,6 +43,7 @@ PER_APP_KEYS = (
     "ALLOWED_ORIGINS",
     "FIRST_ADMIN_EMAIL",
     "JOB_TOKEN",
+    "GITHUB_TOKEN",
 )
 
 # Keys that must differ between apps. Two apps on one database would mix their tables.
