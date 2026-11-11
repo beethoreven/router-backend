@@ -18,3 +18,7 @@ psycopg[binary]==3.3.8
 Flask-Cors==6.0.5
 # Counting characters the way people do (an emoji is one): `\X` grapheme clusters.
 regex==2026.11.9
+# fireless-war: site-wide rate limits that protect the shared Google Sheets quota (checked PyPI 2026-11-11).
+Flask-Limiter==4.1.1
+# fireless-war: reading each game's Google Sheet with the service account (checked PyPI 2026-11-11).
+gspread==6.2.1

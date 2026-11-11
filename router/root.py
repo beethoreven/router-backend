@@ -29,6 +29,7 @@ from router.dispatcher import LazyApp, Mount, build_mounts
 MOUNTS: tuple[Mount, ...] = (
     Mount("diary", "apps.diary.app:create_app"),
     Mount("mama-fufood", "apps.mama_fufood.app:create_app"),
+    Mount("fireless-war", "apps.fireless_war.app:create_app"),
 )
 
 
