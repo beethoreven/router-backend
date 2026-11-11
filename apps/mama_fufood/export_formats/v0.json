@@ -1,7 +1,7 @@
 {
  "format_version": 0,
  "min_app_version": "0.1.0",
- "description": "第 0 版匯出格式的 data.json(上架前的格式,App 0.x;規格見 EXPORT_FORMAT_DRAFT.md 第 5 節)。欄位全部必填。",
+ "description": "第 0 版匯出格式的 data.json(上架前的格式,App 0.x)。欄位全部必填。",
  "root": {"type": "object", "fields": {
   "format_version": {"type": "int", "const": 0},
   "settings": {"type": "object", "fields": {
