@@ -28,7 +28,8 @@ log = logging.getLogger(__name__)
 
 API = "https://api.github.com"
 UPLOADS = "https://uploads.github.com"
-TAG = "fonts"
+# One release per project: the fonts repo (general-fonts) is shared with other projects.
+TAG = "all-mo-diary"
 CHUNK = 256 * 1024
 MAX_FONT_BYTES = 120 * 1024 * 1024
 _SIGNATURES = (b"OTTO", b"\x00\x01\x00\x00", b"true", b"typ1")
@@ -46,14 +47,14 @@ def _headers(token: str) -> dict:
 
 
 def _release_id(repo: str, token: str) -> int:
-    """The release that holds the font files (tag "fonts"); created the first time."""
+    """The release that holds the font files (tag "all-mo-diary"); created the first time."""
     resp = requests.get(f"{API}/repos/{repo}/releases/tags/{TAG}", headers=_headers(token), timeout=20)
     if resp.status_code == 200:
         return int(resp.json()["id"])
     if resp.status_code != 404:
         raise UploadError(f"GitHub 回應錯誤（{resp.status_code}），請確認 DIARY__FONTS_REPO 與 DIARY__GITHUB_TOKEN", 502)
     resp = requests.post(f"{API}/repos/{repo}/releases", headers=_headers(token), timeout=20,
-                         data=json.dumps({"tag_name": TAG, "name": "Fonts", "body": "全心日記的字體檔（由後台上傳）"}))
+                         data=json.dumps({"tag_name": TAG, "name": "全心日記", "body": "全心日記的字體檔（由後台上傳）"}))
     if resp.status_code not in (200, 201):
         raise UploadError(f"無法建立 GitHub Release（{resp.status_code}）", 502)
     return int(resp.json()["id"])
