@@ -22,3 +22,5 @@ regex==2026.11.9
 Flask-Limiter==4.1.1
 # fireless-war: reading each game's Google Sheet with the service account (checked PyPI 2026-11-11).
 gspread==6.2.1
+# Drawing mama-stocker's five-year price chart as a PNG (apps/mama_stocker/line_utils/draw.py).
+Pillow==13.0.0

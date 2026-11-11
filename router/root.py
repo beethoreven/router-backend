@@ -30,6 +30,7 @@ MOUNTS: tuple[Mount, ...] = (
     Mount("diary", "apps.diary.app:create_app"),
     Mount("mama-fufood", "apps.mama_fufood.app:create_app"),
     Mount("fireless-war", "apps.fireless_war.app:create_app"),
+    Mount("mama-stocker", "apps.mama_stocker.app:create_app"),
 )
 
 

@@ -44,6 +44,8 @@ PER_APP_KEYS = (
     "JOB_TOKEN",
     "GITHUB_TOKEN",
     "SERVICE_ACCOUNT_JSON", "APPS_SCRIPT_SECRET", "PERMITTED_USERS",  # fireless-war
+    "LINE_CHANNEL_SECRET",
+    "LINE_CHANNEL_ACCESS_TOKEN",
 )
 
 # Keys that must differ between apps. Two apps on one database would mix their tables.
