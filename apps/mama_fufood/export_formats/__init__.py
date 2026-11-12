@@ -1,13 +1,13 @@
 """匯出格式:欄位定義、檢查與逐版轉換。
 
 - 每個格式版本一份欄位定義(`v{N}.json`),跟著後端程式發布,部署時寫入 formats 表。
-- 格式版本 = App 的主版本號 x。目前是第 1 版(App 1.x);第 0 版是上架前的格式(App 0.x)。
+- 格式版本和 App 的版本號分開記。目前是第 1 版(App 1.0.0 起);第 0 版是上架前的格式(App 0.x)。
 - 舊格式轉新格式採**逐版轉換**(1→2→3):每次改格式只新增一支
   「上一版轉這一版」的函式,登記在 CONVERTERS。
 - 每個格式版本保留一份樣本檔(`samples/v{N}.json`),測試會把所有舊樣本一路轉到
   最新版並通過檢查(tests/test_formats.py)。
 
-升格式版本(升 x)時要一起改:App 匯出時寫入的格式版本(lib/services/export_format.dart)、
+升格式版本時要一起改:App 匯出時寫入的格式版本(lib/services/export_format.dart)、
 新增 v{N}.json、CONVERTERS 加一支「第 N-1 版轉第 N 版」、新增 samples/v{N}.json,
 App 的測試樣本(test/fixtures/)也換成同一份。
 """
