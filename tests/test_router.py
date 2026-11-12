@@ -99,10 +99,10 @@ def test_unknown_url_is_json(two_apps):
 
 def test_building_starts_no_thread_and_imports_no_app(monkeypatch):
     before = threading.active_count()
-    monkeypatch.delitem(sys.modules, "apps.diary.app", raising=False)
+    monkeypatch.delitem(sys.modules, "apps.all_mo_diary.app", raising=False)
     build(environ={})
     assert threading.active_count() == before
-    assert "apps.diary.app" not in sys.modules
+    assert "apps.all_mo_diary.app" not in sys.modules
 
 
 def test_gunicorn_access_log_is_off():

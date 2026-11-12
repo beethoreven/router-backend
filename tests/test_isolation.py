@@ -85,7 +85,7 @@ def test_the_checker_catches_each_mistake(tmp_path, monkeypatch):
     (bad / "__init__.py").write_text("")
     (bad / "db" / "__init__.py").write_text("")
     (bad / "app.py").write_text(
-        "import os\nfrom db import connection\nimport apps.diary.app\nx = os.environ['X']\n")
+        "import os\nfrom db import connection\nimport apps.all_mo_diary.app\nx = os.environ['X']\n")
     monkeypatch.setattr(sys.modules[__name__], "ROOT", tmp_path)
     found = _problems(bad)
     assert any("bare import" in p for p in found)
@@ -137,7 +137,7 @@ def test_the_shared_checker_catches_each_mistake(tmp_path, monkeypatch):
     bad.mkdir()
     (bad / "__init__.py").write_text("")
     (bad / "thing.py").write_text(
-        "import os\nimport apps.diary.db\n_cache = {}\nLIMIT = 3\n"
+        "import os\nimport apps.all_mo_diary.db\n_cache = {}\nLIMIT = 3\n"
         "def f():\n    global _cache\n    return os.environ['X']\n")
     monkeypatch.setattr(sys.modules[__name__], "ROOT", tmp_path)
     found = _shared_problems(bad)

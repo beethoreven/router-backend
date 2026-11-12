@@ -14,19 +14,19 @@ from shared import google_auth
 from shared.admin_auth import AdminSessions, normalize_email
 from shared.app_pass import AppPass
 
-DIARY = AppPass(prefix="amd1.", purpose=b"all-mo-diary:app-token:v1")
-FUFOOD = AppPass(prefix="mff1.", purpose=b"mama-fufood:app-token:v1")
+ALL_MO_DIARY = AppPass(prefix="amd1.", purpose=b"all-mo-diary:app-token:v1")
+MAMA_FUFOOD = AppPass(prefix="mff1.", purpose=b"mama-fufood:app-token:v1")
 VECTOR_NOW = 1_800_000_000
-DIARY_PASS = ("amd1.eyJ2IjoxLCJzdWIiOiJzdWItMTIzIiwiZW1haWwiOiJtZUBleGFtcGxlLmNvbSIsImlhdCI6MTgwMDAwMDAwMCwiZXhw"
+ALL_MO_DIARY_PASS = ("amd1.eyJ2IjoxLCJzdWIiOiJzdWItMTIzIiwiZW1haWwiOiJtZUBleGFtcGxlLmNvbSIsImlhdCI6MTgwMDAwMDAwMCwiZXhw"
               "IjoxODE1NTUyMDAwfQ.WZNm9GfbaZ4L8bObCd8nb0Lp569E1PVcWKLn_JfLepE")
-FUFOOD_PASS = ("mff1.eyJ2IjoxLCJzdWIiOiJzdWItMTIzIiwiZW1haWwiOiJtZUBleGFtcGxlLmNvbSIsImlhdCI6MTgwMDAwMDAwMCwiZXhw"
+MAMA_FUFOOD_PASS = ("mff1.eyJ2IjoxLCJzdWIiOiJzdWItMTIzIiwiZW1haWwiOiJtZUBleGFtcGxlLmNvbSIsImlhdCI6MTgwMDAwMDAwMCwiZXhw"
                "IjoxODE1NTUyMDAwfQ.HHLTmAjktJkBeePo3To8p80FpiS7NA8sny1hkwNfCZQ")
 RANDOM_PART = "0123456789abcdef0123456789abcdef01234567"
 
 
 # ── app pass ──
 
-@pytest.mark.parametrize("fmt, expected", [(DIARY, DIARY_PASS), (FUFOOD, FUFOOD_PASS)])
+@pytest.mark.parametrize("fmt, expected", [(ALL_MO_DIARY, ALL_MO_DIARY_PASS), (MAMA_FUFOOD, MAMA_FUFOOD_PASS)])
 def test_pass_is_byte_for_byte_what_the_apps_issued_before(fmt, expected):
     token, exp = fmt.issue("vector-secret", "sub-123", "me@example.com", now=VECTOR_NOW)
     assert token == expected and exp == 1_815_552_000
@@ -35,28 +35,28 @@ def test_pass_is_byte_for_byte_what_the_apps_issued_before(fmt, expected):
 
 
 def test_one_apps_pass_is_not_anothers_even_with_the_same_secret():
-    assert FUFOOD.verify("vector-secret", DIARY_PASS, now=VECTOR_NOW) is None
-    swapped = "mff1." + DIARY_PASS[len("amd1."):]
-    assert FUFOOD.verify("vector-secret", swapped, now=VECTOR_NOW) is None  # purpose differs
+    assert MAMA_FUFOOD.verify("vector-secret", ALL_MO_DIARY_PASS, now=VECTOR_NOW) is None
+    swapped = "mff1." + ALL_MO_DIARY_PASS[len("amd1."):]
+    assert MAMA_FUFOOD.verify("vector-secret", swapped, now=VECTOR_NOW) is None  # purpose differs
 
 
 def test_pass_expiry_renewal_and_tampering():
-    token, exp = DIARY.issue("k", "1", "a@b.c", now=1_000_000)
-    assert DIARY.verify("k", token, now=1_000_000 + 10)["renew"] is False
-    assert DIARY.verify("k", token, now=1_000_000 + 31 * 86400)["renew"] is True
-    assert DIARY.verify("k", token, now=exp) is None  # expired
-    assert DIARY.verify("other-key", token, now=1_000_010) is None  # wrong secret
-    assert DIARY.verify("", token, now=1_000_010) is None  # no secret configured
+    token, exp = ALL_MO_DIARY.issue("k", "1", "a@b.c", now=1_000_000)
+    assert ALL_MO_DIARY.verify("k", token, now=1_000_000 + 10)["renew"] is False
+    assert ALL_MO_DIARY.verify("k", token, now=1_000_000 + 31 * 86400)["renew"] is True
+    assert ALL_MO_DIARY.verify("k", token, now=exp) is None  # expired
+    assert ALL_MO_DIARY.verify("other-key", token, now=1_000_010) is None  # wrong secret
+    assert ALL_MO_DIARY.verify("", token, now=1_000_010) is None  # no secret configured
     body, sig = token[len("amd1."):].split(".")
-    assert DIARY.verify("k", "amd1." + body[:-2] + "AA." + sig, now=1_000_010) is None
-    assert DIARY.verify("k", "amd1." + body, now=1_000_010) is None  # no signature
-    assert DIARY.verify("k", None) is None and DIARY.verify("k", 12345) is None
-    assert DIARY.verify("k", "eyJhbGciOiJSUzI1NiIsImtpZCI6IngifQ.eyJ9.sig") is None  # a raw Google ID token
+    assert ALL_MO_DIARY.verify("k", "amd1." + body[:-2] + "AA." + sig, now=1_000_010) is None
+    assert ALL_MO_DIARY.verify("k", "amd1." + body, now=1_000_010) is None  # no signature
+    assert ALL_MO_DIARY.verify("k", None) is None and ALL_MO_DIARY.verify("k", 12345) is None
+    assert ALL_MO_DIARY.verify("k", "eyJhbGciOiJSUzI1NiIsImtpZCI6IngifQ.eyJ9.sig") is None  # a raw Google ID token
 
 
 def test_pass_needs_a_secret_and_a_sane_format():
     with pytest.raises(ValueError):
-        DIARY.issue("", "1", "a@b.c")
+        ALL_MO_DIARY.issue("", "1", "a@b.c")
     with pytest.raises(ValueError):
         AppPass(prefix="amd1", purpose=b"x")
     with pytest.raises(ValueError):

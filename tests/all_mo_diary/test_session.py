@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from apps.diary.auth import app_pass
+from apps.all_mo_diary.auth import app_pass
 from router.root import build
 from shared import google_auth
 
@@ -55,7 +55,7 @@ def test_google_unreachable_is_503_not_401(monkeypatch):
 
 
 def test_authenticate_accepts_only_our_pass():
-    from apps.diary import routes
+    from apps.all_mo_diary import routes
 
     app = build(environ=ENV)
     diary = None

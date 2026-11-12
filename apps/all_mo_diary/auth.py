@@ -17,7 +17,7 @@ from . import config, db
 app_pass = AppPass(prefix="amd1.", purpose=b"all-mo-diary:app-token:v1", days=180, renew_days=30)
 
 admin = AdminAuth(
-    "diary",
+    "all-mo-diary",
     database=db.database,
     purpose=b"all-mo-diary:admin-session:v1",
     secret=lambda: config.get().session_secret,
@@ -28,4 +28,4 @@ admin = AdminAuth(
     admins_table="admins",
 )
 
-rejections = RejectionLog("diary")
+rejections = RejectionLog("all-mo-diary")

@@ -89,7 +89,7 @@ def _create_tables(cur) -> None:
 
 
 database = Database(
-    "diary",
+    "all-mo-diary",
     url=lambda: config.get().database_url,
     schema=_create_tables,
     schema_lock="all-mo-diary:schema",

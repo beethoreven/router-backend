@@ -6,8 +6,10 @@
 https://router-backend-3hl2.onrender.com
   /health            保活用，不載入任何 app、不碰資料庫（每 10 分鐘由外部排程打一次）
   /ready             每個 app 載不載得起來（不碰資料庫）
-  /diary/...         全心日記（apps/diary）
+  /diary/...         全心日記（apps/all_mo_diary）
   /mama-fufood/...   媽媽記副食品（apps/mama_fufood）
+  /mama-stocker/...   LINE 股票資訊 bot（apps/mama_stocker）
+  /fireless-war/...   願浮沉2：無火戰爭（apps/fireless_war）
 ```
 
 ## 目錄
@@ -63,8 +65,8 @@ API 每個 App 不同，留在各自的 app；跟 API 沒有直接關係的安�
 
 1. **名字**：用 App 的完整名稱，網址前綴與環境變數前綴都由它決定：`mama-fufood` → `/mama-fufood`、`MAMA_FUFOOD__…`。Python 套件名稱不能有連字號，所以資料夾用底線：`Mount("mama-fufood", "apps.mama_fufood.app:create_app")`。
 2. **程式**放到 `apps/<套件>/`，import 全部改成相對路徑。
-3. **設定**：仿照 `apps/diary/config.py`，寫一個 frozen dataclass，用 `from_settings(settings)` 讀值，在 `create_app` 裡 `set_current`。不要在程式裡寫死預設值（client ID、試算表 ID、來源網域）。秘密欄位加 `repr=False`。秘密與每個 app 各一份的設定名稱，加進 `router/settings.py` 的 `PER_APP_KEYS`。
-4. **改用 `shared/`**：參考 `apps/diary/auth.py`、`db.py`、`cache.py`、`app.py`。已經發出去的 token 要繼續有效時，`prefix`、`purpose`、資料表名稱、`schema_lock` 都要沿用原本的值，秘密也要同一個。
+3. **設定**：仿照 `apps/all_mo_diary/config.py`，寫一個 frozen dataclass，用 `from_settings(settings)` 讀值，在 `create_app` 裡 `set_current`。不要在程式裡寫死預設值（client ID、試算表 ID、來源網域）。秘密欄位加 `repr=False`。秘密與每個 app 各一份的設定名稱，加進 `router/settings.py` 的 `PER_APP_KEYS`。
+4. **改用 `shared/`**：參考 `apps/all_mo_diary/auth.py`、`db.py`、`cache.py`、`app.py`。已經發出去的 token 要繼續有效時，`prefix`、`purpose`、資料表名稱、`schema_lock` 都要沿用原本的值，秘密也要同一個。
 5. **create_app(settings)**：用 `shared.flask_app.new_app` 建 app；要跨來源就用 `allow_cors`，來源從設定讀。不要自己定義 `/health`，那是整台的保活。要有自己的 `/ready` 可以，但不能碰資料庫。
 6. **定時的背景工作**：保活只打 router 的 `/health`，不會觸發 app 的 `before_request`。需要定時跑的工作，app 自己開一個 `GET /<app>/warm`：請求本身不碰資料庫、不對外連線，只回報狀態，靠它觸發 `before_request`；在 `before_request` 裡用時間間隔加上 non-blocking lock，保證同時間只有一條背景執行緒，再用外部排程定時打它。別人也打得到這個網址，所以頻率的上限要由間隔本身保證。
 7. **測試**放在 `tests/<套件>/`，有自己的 `conftest.py`；要資料庫就用 `empty_database` fixture。

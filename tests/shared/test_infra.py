@@ -109,14 +109,14 @@ def test_daily_counter_resets_at_taipei_midnight(monkeypatch):
 # ── rejections ──
 
 def test_rejections_are_summarised_per_app(caplog, monkeypatch):
-    diary, other = RejectionLog("diary", window_seconds=0), RejectionLog("other", window_seconds=1000)
-    diary.note("bad body")
+    all_mo_diary, other = RejectionLog("all-mo-diary", window_seconds=0), RejectionLog("other", window_seconds=1000)
+    all_mo_diary.note("bad body")
     other.note("bad body")
     with caplog.at_level("WARNING", logger="shared.rejections"):
-        diary.note("bad body")  # the window (0 s) has passed: summary of the first one
+        all_mo_diary.note("bad body")  # the window (0 s) has passed: summary of the first one
         other.note("bad body")  # still inside its window: nothing logged
     lines = [r.getMessage() for r in caplog.records]
-    assert len(lines) == 1 and "[diary]" in lines[0] and "bad body 1 次" in lines[0]
+    assert len(lines) == 1 and "[all-mo-diary]" in lines[0] and "bad body 1 次" in lines[0]
 
 
 # ── snapshot cache ──

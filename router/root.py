@@ -27,7 +27,7 @@ from router.dispatcher import LazyApp, Mount, build_mounts
 # create_app(settings) function, then add a line here. The name is also its URL prefix and its
 # environment-variable prefix (see router/settings.py).
 MOUNTS: tuple[Mount, ...] = (
-    Mount("diary", "apps.diary.app:create_app"),
+    Mount("diary", "apps.all_mo_diary.app:create_app"),
     Mount("mama-fufood", "apps.mama_fufood.app:create_app"),
     Mount("fireless-war", "apps.fireless_war.app:create_app"),
     Mount("mama-stocker", "apps.mama_stocker.app:create_app"),

@@ -1,6 +1,6 @@
 """Mount each app under its own URL prefix and load it lazily, one failure at a time.
 
-    /diary/...   → apps.diary.app.create_app(settings)
+    /diary/...   → apps.all_mo_diary.app.create_app(settings)
 
 Why lazily: an app that fails to import (a bug, a missing package) must take down only its own
 prefix, never the whole service. Loading happens on the first request to that prefix, or on

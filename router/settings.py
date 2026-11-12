@@ -1,7 +1,7 @@
 """Each app's settings, read from environment variables that carry the app's prefix.
 
     DIARY__DATABASE_URL=...      → settings_for("diary").text("DATABASE_URL")
-    FUFOOD__GOOGLE_CLIENT_ID=... → settings_for("fufood").text("GOOGLE_CLIENT_ID")
+    MAMA_FUFOOD__GOOGLE_CLIENT_ID=... → settings_for("mama-fufood").text("GOOGLE_CLIENT_ID")
 
 Prefix rule: the app name upper-cased, hyphens turned into underscores, followed by two underscores.
 

@@ -1,6 +1,6 @@
 """Postgres access for every app: one connection per call, capped per app and for the whole process.
 
-    database = Database("diary", url=lambda: config.get().database_url, schema=create_tables)
+    database = Database("all-mo-diary", url=lambda: config.get().database_url, schema=create_tables)
 
     with database.connection() as conn:
         with conn.cursor() as cur:

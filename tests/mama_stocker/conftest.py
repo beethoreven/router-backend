@@ -13,7 +13,7 @@ import pytest
 
 from tests.conftest import TEST_DATABASE_URL
 
-STOCKER_ENV = {
+MAMA_STOCKER_ENV = {
     "MAMA_STOCKER__LINE_CHANNEL_SECRET": "test-secret",
     "MAMA_STOCKER__LINE_CHANNEL_ACCESS_TOKEN": "test-token",
     "MAMA_STOCKER__START_WARM_UP": "0",
@@ -38,7 +38,7 @@ def mama_stocker_config():
 
 @pytest.fixture
 def mama_stocker_env():
-    return dict(STOCKER_ENV)
+    return dict(MAMA_STOCKER_ENV)
 
 
 @pytest.fixture

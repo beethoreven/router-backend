@@ -14,7 +14,7 @@ The point is that a hot path (the daily check) never touches the database, so Ne
   background thread is already loading, it returns None at once instead of queueing behind a network
   call.
 
-    public = SnapshotCache("diary", load=read_from_db, retry_seconds=lambda: config.get().cache_retry_seconds,
+    public = SnapshotCache("all-mo-diary", load=read_from_db, retry_seconds=lambda: config.get().cache_retry_seconds,
                            enabled=lambda: bool(config.get().database_url))
 """
 

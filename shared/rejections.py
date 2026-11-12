@@ -4,7 +4,7 @@ Under a flood of bad requests, a log line per request is itself the cost, and it
 out of the log. Each app keeps its own RejectionLog and writes at most one summary line a minute,
 with counts only and no source information (the apps don't keep IPs).
 
-    rejections = RejectionLog("diary")
+    rejections = RejectionLog("all-mo-diary")
     rejections.note("invalid pass")
 """
 

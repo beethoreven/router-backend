@@ -9,7 +9,7 @@ import uuid
 
 import pytest
 
-from tests.diary.conftest import admin_headers, pass_for
+from tests.all_mo_diary.conftest import admin_headers, pass_for
 
 CHECK = "/diary/api/v1/check"
 FEEDBACK = "/diary/api/v1/feedback"
@@ -74,7 +74,7 @@ def _font_file_info(name="font-1-abcd.otf.gz"):
 
 
 def test_fonts_publish_flow_and_check(diary, monkeypatch):
-    from apps.diary import github_release
+    from apps.all_mo_diary import github_release
 
     admin = admin_headers(diary)
     font_id = diary.post(f"{ADMIN}/fonts", json={"name": "霞鶩文楷 TC", "sort": 1, "licensed": True},
@@ -182,7 +182,7 @@ def test_cors_only_for_the_admin_console(diary):
 @pytest.mark.parametrize("path", ["/diary/api/v1/check", "/diary/api/v1/feedback"])
 def test_forged_pass_never_touches_the_database(path, monkeypatch, diary_env, db_clean):
     """A well-formed but forged pass is rejected before any database connection."""
-    from apps.diary import db
+    from apps.all_mo_diary import db
     from router.root import build
 
     monkeypatch.setattr(db, "connection", lambda: pytest.fail("touched the database"))

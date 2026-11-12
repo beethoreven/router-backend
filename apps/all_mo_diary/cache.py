@@ -21,7 +21,7 @@ def _read_from_db() -> dict:
 
 
 public = SnapshotCache(
-    "diary",
+    "all-mo-diary",
     load=_read_from_db,
     retry_seconds=lambda: config.get().cache_retry_seconds,
     enabled=lambda: bool(config.get().database_url),

@@ -38,7 +38,7 @@ def diary_env():
 @pytest.fixture
 def db_clean(empty_database):
     """An empty test database (schema recreated on first connection) and fresh in-memory state."""
-    from apps.diary import admin_routes, auth, cache, db, routes
+    from apps.all_mo_diary import admin_routes, auth, cache, db, routes
 
     db.database.reset_for_tests()
     cache.public.reset_for_tests()
@@ -60,7 +60,7 @@ def diary(monkeypatch, diary_env, db_clean):
 
 
 def pass_for(sub: str = "u1", email: str = "me@example.com", now: float | None = None) -> dict:
-    from apps.diary.auth import app_pass
+    from apps.all_mo_diary.auth import app_pass
 
     token, _ = app_pass.issue(DIARY_ENV["DIARY__SESSION_SECRET"], sub, email, now=now)
     return {"Authorization": f"Bearer {token}"}

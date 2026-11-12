@@ -45,8 +45,8 @@ def test_quoted_value_is_refused_without_printing_it():
 
 def test_two_apps_on_one_database_is_refused():
     with pytest.raises(ConfigError, match="same value"):
-        load_all(["diary", "fufood"], {
-            "DIARY__DATABASE_URL": "postgresql://same", "FUFOOD__DATABASE_URL": "postgresql://same"})
+        load_all(["diary", "mama-fufood"], {
+            "DIARY__DATABASE_URL": "postgresql://same", "MAMA_FUFOOD__DATABASE_URL": "postgresql://same"})
 
 
 def test_bad_number_names_the_key():

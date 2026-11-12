@@ -8,7 +8,7 @@ import io
 
 import pytest
 
-from apps.diary import github_release
+from apps.all_mo_diary import github_release
 
 
 class _Resp:

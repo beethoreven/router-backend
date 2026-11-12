@@ -1,7 +1,7 @@
 """The admin console's sign-in: sessions, the admin list, and the require_admin gate.
 
     admin = AdminAuth(
-        "diary", database=db.database, purpose=b"all-mo-diary:admin-session:v1",
+        "all-mo-diary", database=db.database, purpose=b"all-mo-diary:admin-session:v1",
         secret=lambda: config.get().session_secret,
         first_admin=lambda: config.get().first_admin_email,
         idle_days=lambda: config.get().session_idle_days,
