@@ -5,7 +5,7 @@ from __future__ import annotations
 import calendar
 from concurrent.futures import ThreadPoolExecutor, wait
 from dataclasses import dataclass, replace
-from datetime import date, datetime, time, timedelta
+from datetime import date, datetime, timedelta
 import logging
 from statistics import median
 
@@ -13,7 +13,7 @@ from . import clock, sources
 
 log = logging.getLogger(__name__)
 
-_OPEN, _CLOSE = time(9, 0), time(13, 30)
+_OPEN, _CLOSE = clock.OPEN, clock.CLOSE
 
 
 def now() -> datetime:
@@ -112,19 +112,10 @@ def _from_quote(rt: dict) -> tuple[bool, float | None]:
 def _latest_close(t: datetime) -> date | None:
     """在 t 這一刻，「最近一次收盤」應該是哪一天；正在開盤中就是 None。
 
-    只看星期幾，不查休市行事曆：國定假日那天會算成「今天有收盤」，收盤表上
-    卻是前一個交易日，日期對不上，結果是查不到，不會回錯的數字。
+    國定假日那天會算成「今天有收盤」（見 clock 的交易時間），收盤表上卻是
+    前一個交易日，日期對不上，結果是查不到，不會回錯的數字。
     """
-    d = t.date()
-    if d.weekday() < 5:
-        if t.time() >= _CLOSE:
-            return d
-        if t.time() >= _OPEN:
-            return None
-    d -= timedelta(days=1)
-    while d.weekday() >= 5:
-        d -= timedelta(days=1)
-    return d
+    return None if clock.in_session(t) else clock.last_close(t)
 
 
 def _closing_price(sym: Symbol) -> float | None:

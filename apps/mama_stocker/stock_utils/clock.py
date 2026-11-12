@@ -10,11 +10,12 @@
 
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import date, datetime, time, timedelta
 
 from shared.timeutil import TAIPEI, taipei_now
 
-__all__ = ["TAIPEI", "now", "today"]
+__all__ = ["TAIPEI", "now", "today", "OPEN", "CLOSE", "in_session", "last_close",
+           "last_slot"]
 
 
 def now() -> datetime:
@@ -24,3 +25,42 @@ def now() -> datetime:
 
 def today() -> date:
     return now().date()
+
+
+# ── 交易時間 ─────────────────────────────────────────────────────
+# 只看星期幾，不查休市行事曆。用到的地方都要能接受「國定假日被當成交易日」：
+# 結果只會是多抓一次或查不到，不能是回錯的數字。
+
+OPEN, CLOSE = time(9, 0), time(13, 30)
+
+
+def _previous_weekday(d: date) -> date:
+    d -= timedelta(days=1)
+    while d.weekday() >= 5:
+        d -= timedelta(days=1)
+    return d
+
+
+def in_session(t: datetime) -> bool:
+    """t 是不是在盤中（平日 9:00～13:30）。"""
+    return t.weekday() < 5 and OPEN <= t.time() < CLOSE
+
+
+def last_close(t: datetime) -> date:
+    """t 之前最近一次收盤是哪一天。盤中是前一個交易日：今天還沒收盤。"""
+    d = t.date()
+    if d.weekday() < 5 and t.time() >= CLOSE:
+        return d
+    return _previous_weekday(d)
+
+
+def last_slot(t: datetime, slots: tuple[time, ...]) -> datetime:
+    """平日的 slots（例如 08:30、20:00）裡，t 之前（含）最近的那一個時刻。"""
+    d = t.date()
+    while True:
+        if d.weekday() < 5:
+            for s in sorted(slots, reverse=True):
+                at = datetime.combine(d, s, tzinfo=t.tzinfo)
+                if at <= t:
+                    return at
+        d -= timedelta(days=1)

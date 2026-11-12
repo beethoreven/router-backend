@@ -18,9 +18,15 @@
 
 ## 快取
 
-這些資料一天只變一次（收盤後）或偶爾才有新公告，所以整包抓下來放記憶體，
-最多放一小時（_TTL）。也就是說：收盤價表、殖利率、配息公告最慢一小時跟上
-官方；盤中即時價不快取，每次都是當下的。
+整包抓下來放記憶體，什麼時候該重抓，看那份資料什麼時候會變：
+
+    收盤價表、殖利率表  表上有日期（_Dated）。已經是最近一次收盤的版本，就一直
+                        用到下一次收盤，期間官方也不會變；收盤後官方還沒出新表
+                        的那段時間，照 _TTL 重抓，新表出來最慢一小時跟上。
+    配息公告            沒有版本日期可看，公司又常在收盤後到傍晚才公告，所以
+                        平日早上、晚上各更新一次（_ANNOUNCE_AT）。
+    其他（每月均價等）  最多放 _TTL。
+    盤中即時價          不快取，每次都是當下的。
 
 ★ 過期就當場重抓，抓不到就明確失敗，**不回舊資料**（理由見 _cached）。
 
@@ -43,6 +49,7 @@ import re
 import threading
 import time
 from datetime import date, datetime, timedelta
+from datetime import time as dt_time
 
 import requests
 
@@ -54,9 +61,12 @@ _UA = {"User-Agent": "Mozilla/5.0 (mama-stocker)"}
 # 連線 4 秒、每次讀取 15 秒。這不是總期限，總期限見 _DEADLINE。
 _TIMEOUT = (4, 15)
 
-# 抓下來的資料放多久。這就是「回出去的數字最多落後官方多久」，不要為了快而
-# 調大。
+# 沒有更好的判斷依據時，抓下來的資料放多久。這就是「回出去的數字最多落後官方
+# 多久」，不要為了快而調大。
 _TTL = 3600
+
+# 配息公告平日在這兩個時刻之後要重抓：開盤前一次，收盤後公司公告完的晚上一次。
+_ANNOUNCE_AT = (dt_time(8, 30), dt_time(20, 0))
 
 # 抓一包資料最多等幾秒（整包，不是每次讀取）。
 _DEADLINE = 8
@@ -118,18 +128,24 @@ class refresh_ahead:
         _ahead.on = self._was
 
 
-def _cached(key: tuple, ttl: float, load, *, deadline: float | None = None):
+def _cached(key: tuple, ttl: float, load, *, deadline: float | None = None, fresh=None):
     """key 對應的資料：還在期限內就直接回，過期就當場重抓、抓到才回。
+
+    期限預設是抓下來之後 ttl 秒。fresh(抓的時刻, 資料, 提前量) 可以換成別的判斷，
+    例如看表上的日期（_dated_fresh）或固定時刻（_announce_fresh）。提前量是預抓
+    要提前多少秒把快過期的資料重抓（見 refresh_ahead），使用者的請求是 0。
 
     ★ **過期的資料一律不回**，抓不到就拋錯（使用者會看到「現在查不到」）。
       慢一點可以，數字一定要對。所以不做「先回舊的、背景重抓」，也不做
       「抓失敗就沿用舊的」：那兩種都會在使用者不知情的情況下給出舊數字。
     """
-    if getattr(_ahead, "on", False):
-        ttl = max(ttl - _REFRESH_AHEAD, 0)
+    ahead = _REFRESH_AHEAD if getattr(_ahead, "on", False) else 0
+    if fresh is None:
+        def fresh(fetched, value, ahead):
+            return time.time() - fetched < ttl - ahead
     deadline = deadline or _DEADLINE
     hit = _cache.get(key)
-    if hit and time.time() - hit[0] < ttl:
+    if hit and fresh(hit[0], hit[1], ahead):
         return hit[1]
     with _locks_guard:
         lock = _locks.setdefault(key, threading.Lock())
@@ -138,7 +154,7 @@ def _cached(key: tuple, ttl: float, load, *, deadline: float | None = None):
         raise TimeoutError(f"{key} 等不到前一次抓取結束")
     try:
         hit = _cache.get(key)
-        if hit and time.time() - hit[0] < ttl:
+        if hit and fresh(hit[0], hit[1], ahead):
             return hit[1]
         failed = _failed.get(key)
         if failed and time.time() - failed[0] < _RETRY_AFTER:
@@ -165,6 +181,40 @@ def _cached(key: tuple, ttl: float, load, *, deadline: float | None = None):
         return value
     finally:
         lock.release()
+
+
+class _Dated(dict):
+    """收盤價表、殖利率表：多帶一個 day，表上最新的資料是哪一個交易日。"""
+    day: date | None = None
+
+
+def _dated(value: dict, days) -> _Dated:
+    out = _Dated(value)
+    out.day = max((d for d in days if d), default=None)
+    return out
+
+
+def _dated_fresh(fetched: float, value, ahead: float) -> bool:
+    """表上已經是最近一次收盤的資料，就一直用到下一次收盤：這段時間官方也不會變。
+
+    還不是（收盤後官方還沒出新表、或國定假日）就照 _TTL 重抓。國定假日會被當成
+    交易日（見 clock 的交易時間），結果只是那天照 _TTL 多抓幾次。
+    """
+    day = getattr(value, "day", None)
+    if day is not None and day >= clock.last_close(clock.now()):
+        return True
+    return time.time() - fetched < _TTL - ahead
+
+
+def _announce_fresh(fetched: float, value, ahead: float) -> bool:
+    """平日 _ANNOUNCE_AT 的每個時刻之後要重抓一次。
+
+    預抓會提前 _REFRESH_AHEAD 秒重抓（例如 08:20 抓）。那一份要算是 08:30 這一輪的，
+    不然 08:30 一過又會被當成過期，所以時刻往前放寬同樣的秒數。
+    """
+    now = clock.now() + timedelta(seconds=ahead)
+    boundary = clock.last_slot(now, _ANNOUNCE_AT)
+    return fetched >= boundary.timestamp() - _REFRESH_AHEAD
 
 
 def stats() -> dict[str, dict]:
@@ -234,10 +284,11 @@ def twse_quotes() -> dict[str, dict]:
     def load():
         rows = _get_json("https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_ALL")
         day = _day(rows)
-        return {r["Code"].strip(): {"name": r["Name"].strip(), "close": number(r["ClosingPrice"]),
-                                    "date": day(r)}
-                for r in rows}
-    return _cached(("twse_quotes",), _TTL, load)
+        out = {r["Code"].strip(): {"name": r["Name"].strip(), "close": number(r["ClosingPrice"]),
+                                   "date": day(r)}
+               for r in rows}
+        return _dated(out, (v["date"] for v in out.values()))
+    return _cached(("twse_quotes",), _TTL, load, fresh=_dated_fresh)
 
 
 def tpex_quotes() -> dict[str, dict]:
@@ -245,12 +296,13 @@ def tpex_quotes() -> dict[str, dict]:
     def load():
         rows = _get_json("https://www.tpex.org.tw/openapi/v1/tpex_mainboard_daily_close_quotes")
         day = _day(rows)
-        return {r["SecuritiesCompanyCode"].strip():
-                {"name": r["CompanyName"].strip(), "close": number(r["Close"]), "date": day(r)}
-                for r in rows}
+        out = {r["SecuritiesCompanyCode"].strip():
+               {"name": r["CompanyName"].strip(), "close": number(r["Close"]), "date": day(r)}
+               for r in rows}
+        return _dated(out, (v["date"] for v in out.values()))
     # 這一包有 4.6 MB（連權證都在裡面），Render 上實測要 6～7 秒，貼著預設的
     # 8 秒期限，所以給它寬一點。
-    return _cached(("tpex_quotes",), _TTL, load, deadline=25)
+    return _cached(("tpex_quotes",), _TTL, load, deadline=25, fresh=_dated_fresh)
 
 
 # ── 全市場：官方殖利率（只有個股，ETF 不在裡面）─────────────────
@@ -258,17 +310,19 @@ def tpex_quotes() -> dict[str, dict]:
 def twse_yields() -> dict[str, float]:
     def load():
         rows = _get_json("https://openapi.twse.com.tw/v1/exchangeReport/BWIBBU_ALL")
-        return {r["Code"].strip(): y for r in rows
-                if (y := number(r["DividendYield"])) is not None}
-    return _cached(("twse_yields",), _TTL, load)
+        out = {r["Code"].strip(): y for r in rows
+               if (y := number(r["DividendYield"])) is not None}
+        return _dated(out, map(_day(rows), rows))
+    return _cached(("twse_yields",), _TTL, load, fresh=_dated_fresh)
 
 
 def tpex_yields() -> dict[str, float]:
     def load():
         rows = _get_json("https://www.tpex.org.tw/openapi/v1/tpex_mainboard_peratio_analysis")
-        return {r["SecuritiesCompanyCode"].strip(): y for r in rows
-                if (y := number(r["YieldRatio"])) is not None}
-    return _cached(("tpex_yields",), _TTL, load)
+        out = {r["SecuritiesCompanyCode"].strip(): y for r in rows
+               if (y := number(r["YieldRatio"])) is not None}
+        return _dated(out, map(_day(rows), rows))
+    return _cached(("tpex_yields",), _TTL, load, fresh=_dated_fresh)
 
 
 # ── 盤中即時 ─────────────────────────────────────────────────────
@@ -392,8 +446,10 @@ def mops_dividends(market: str, year: int) -> dict[str, list[dict]]:
     #   本機要 3～6 秒，Render 上要 11～20 秒。8 秒的期限會讓「利率」「配息」
     #   整個回「查不到」。平常是預抓在背景付這個時間，使用者不會等到。
     #   （試過只查一家公司，網站不理 co_id，一律回整張表。）
-    return _cached(("mops", market, year), _TTL if year >= clock.today().year else 86400, load,
-                   deadline=45)
+    # 去年的表只剩零星更正，放一天就好；今年的照配息公告的時刻更新。
+    if year >= clock.today().year:
+        return _cached(("mops", market, year), _TTL, load, deadline=45, fresh=_announce_fresh)
+    return _cached(("mops", market, year), 86400, load, deadline=45)
 
 
 # ── 配息：上市 ETF ───────────────────────────────────────────────
@@ -414,7 +470,7 @@ def twse_etf_dividends(code: str, today: date) -> list[dict]:
             if ex:
                 out.append({"ex_date": ex, "pay_date": roc_date(r[4]), "cash": number(r[5])})
         return out
-    return _cached(("twse_etf", code), _TTL, load)
+    return _cached(("twse_etf", code), _TTL, load, fresh=_announce_fresh)
 
 
 # ── 配息：上櫃 ETF（三支拼起來）─────────────────────────────────
@@ -432,7 +488,7 @@ def tpex_past_dividends(today: date) -> dict[str, list[dict]]:
             if ex and cash:
                 out.setdefault(r[1].strip(), []).append({"ex_date": ex, "cash": cash})
         return out
-    return _cached(("tpex_past",), _TTL, load)
+    return _cached(("tpex_past",), _TTL, load, fresh=_announce_fresh)
 
 
 def tpex_upcoming_dividends() -> dict[str, list[dict]]:
@@ -446,7 +502,7 @@ def tpex_upcoming_dividends() -> dict[str, list[dict]]:
                 out.setdefault(r["SecuritiesCompanyCode"].strip(), []).append(
                     {"ex_date": ex, "cash": number(r["CashDividend"]) or None})
         return out
-    return _cached(("tpex_upcoming",), _TTL, load)
+    return _cached(("tpex_upcoming",), _TTL, load, fresh=_announce_fresh)
 
 
 def tpex_etf_pay_dates(code: str) -> dict[date, date]:
@@ -465,7 +521,7 @@ def tpex_etf_pay_dates(code: str) -> dict[date, date]:
             if ex and pay:
                 out[ex] = pay
         return out
-    return _cached(("tpex_etf_pay", code), _TTL, load)
+    return _cached(("tpex_etf_pay", code), _TTL, load, fresh=_announce_fresh)
 
 
 # ── 每月均價（走勢圖用）─────────────────────────────────────────
