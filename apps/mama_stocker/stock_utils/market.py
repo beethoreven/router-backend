@@ -60,30 +60,44 @@ def by_name(name: str) -> Symbol | None:
 
 # ── 現價 ─────────────────────────────────────────────────────────
 
-def price(sym: Symbol) -> tuple[bool, float | None]:
-    """(是不是盤中, 價格)。
+def price(sym: Symbol) -> tuple[bool, float | None, bool]:
+    """(是不是盤中, 價格, 是不是用了非官方的備用來源)。
 
     盤中 = 現在是 9:00～13:30，而且行情資料的日期就是今天。假日與颱風假
     不必另外查行事曆：那種日子行情資料停在上一個交易日，日期對不上。
 
-    即時行情問不到時，退回每日收盤表，但**只在表上的日期就是最近一次收盤**
-    的時候（見 _latest_close）。盤中、或剛收盤表還沒更新，表上是昨天的收盤價，
-    拿來當「當前」就錯了，那種時候照樣拋錯。慢一點、查不到都可以，數字一定
-    要對。
+    依序問：
+      1. 官方即時行情（mis.twse）。
+      2. 官方每日收盤表，但**只在表上的日期就是最近一次收盤**的時候（見
+         _latest_close）。盤中、或剛收盤表還沒更新，表上是昨天的收盤價，拿來當
+         「當前」就錯了，那種時候跳過。
+      3. Yahoo 股市（非官方）。回覆裡要標出來，第三個值就是給 handler 判斷的。
+    三個都不行就把官方即時行情的錯拋出去。慢一點、查不到都可以，數字一定要對。
     """
     try:
         rt = sources.realtime(sym.market, sym.code)
-    except Exception as exc:  # noqa: BLE001 - 退回收盤表；也退不了就把原本的錯拋出去
-        close = _closing_price(sym)
-        if close is None:
-            raise
-        log.warning("即時行情失敗（%s），改用收盤表：%s", sym.code, type(exc).__name__)
-        return False, close
-    if not rt:
-        close = _closing_price(sym)
-        if close is None:
+        if not rt:
             raise LookupError(f"即時行情沒有 {sym.code} 的資料")
-        return False, close
+    except Exception as exc:  # noqa: BLE001 - 往下退；都退不了就拋這個
+        close = _closing_price(sym)
+        if close is not None:
+            log.warning("即時行情失敗（%s），改用收盤表：%s", sym.code, type(exc).__name__)
+            return False, close, False
+        try:
+            rt = sources.yahoo_quote(sym.market, sym.code)
+        except Exception as backup_exc:  # noqa: BLE001
+            log.warning("即時行情失敗（%s）：%s；Yahoo 也失敗：%s", sym.code,
+                        type(exc).__name__, type(backup_exc).__name__)
+            raise exc from None
+        if not rt:
+            raise exc from None
+        log.warning("即時行情失敗（%s），改用 Yahoo：%s", sym.code, type(exc).__name__)
+        return (*_from_quote(rt), True)
+    return (*_from_quote(rt), False)
+
+
+def _from_quote(rt: dict) -> tuple[bool, float | None]:
+    """即時行情（官方或 Yahoo，格式相同）→ (是不是盤中, 價格)。"""
     t = now()
     trading = rt["date"] == t.date() and _OPEN <= t.time() < _CLOSE
     if rt["last"]:
@@ -194,6 +208,14 @@ def period_months(history: list[Payout]) -> int | None:
     return 1 if g < 45 else 3 if g < 135 else 6 if g < 270 else 12
 
 
+def official_yield(sym: Symbol) -> float | None:
+    """官方表上的殖利率；ETF 沒有這個欄位，個股不在表上也是 None。"""
+    if sym.is_etf:
+        return None
+    table = sources.twse_yields if sym.market == "tse" else sources.tpex_yields
+    return table().get(sym.code)
+
+
 def yield_percent(sym: Symbol, history: list[Payout], current: float | None) -> float:
     """殖利率（%）。
 
@@ -202,11 +224,9 @@ def yield_percent(sym: Symbol, history: list[Payout], current: float | None) -> 
     所以自己算：過去 365 天實際配的現金 ÷ 現價——Yahoo、CMoney 也是這個算法。
     個股在官方表裡找不到時（例如剛上市）也退回這個算法。
     """
-    if not sym.is_etf:
-        table = sources.twse_yields if sym.market == "tse" else sources.tpex_yields
-        official = table().get(sym.code)
-        if official is not None:
-            return official
+    official = official_yield(sym)
+    if official is not None:
+        return official
     if not current:
         # 沒有現價就算不出來。回 0% 會被讀成「這支不配息」，寧可查不到。
         raise LookupError(f"{sym.code} 沒有現價，算不出殖利率")

@@ -9,6 +9,7 @@
     櫃買中心網站        www.tpex.org.tw/www       除權息結果、每月均價
     櫃買 ETF 訊息中心   info.tpex.org.tw          上櫃 ETF 的發放日
     公開資訊觀測站      mopsov.twse.com.tw        個股的除息日、發放日、金額
+    Yahoo 股市（非官方）tw.stock.yahoo.com        即時價的備用，官方都問不到才用
 
 ★ mis.twse.com.tw 從 Render 連不到：2026-11-12 起，TCP 連得上，但送出請求後
   對方不回任何 HTTP 就斷線（RemoteDisconnected）；同一時間本機用一模一樣的
@@ -41,7 +42,7 @@ import logging
 import re
 import threading
 import time
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 
 import requests
 
@@ -312,6 +313,39 @@ def realtime(market: str, code: str) -> dict | None:
         "prev_close": number(r.get("y")),
     }
 
+
+
+def yahoo_quote(market: str, code: str) -> dict | None:
+    """Yahoo 股市網頁自己用的那一支，回傳格式跟 realtime 一樣。不快取。
+
+    非官方來源，只在官方的即時行情和收盤表都用不了的時候才問（見 market.price），
+    用到它的回覆要標出來。格式跟預期不一樣就當作失敗（ValueError），不猜。
+    這支股票不在回應裡回 None。
+    """
+    symbol = f"{code}.{'TW' if market == 'tse' else 'TWO'}"
+
+    def load():
+        # 參數是用分號接在路徑後面，不是 query string。
+        r = requests.get(
+            f"https://tw.stock.yahoo.com/_td-stock/api/resource/StockServices.stockList;symbols={symbol}",
+            headers=_UA, timeout=_TIMEOUT)
+        r.raise_for_status()
+        return r.json()
+    rows = _with_deadline(load, 4)
+    if not isinstance(rows, list):
+        raise ValueError(f"Yahoo 回的不是 list：{type(rows).__name__}")
+    row = next((r for r in rows if isinstance(r, dict) and r.get("symbol") == symbol), None)
+    if row is None:
+        return None
+    try:
+        last = float(row["price"]["raw"])
+        prev = float(row["regularMarketPreviousClose"]["raw"])
+        at = datetime.fromisoformat(row["regularMarketTime"].replace("Z", "+00:00"))
+    except (KeyError, TypeError, ValueError) as exc:
+        raise ValueError(f"Yahoo {symbol} 的格式不對：{type(exc).__name__}: {exc}"[:200]) from None
+    if last <= 0 or prev <= 0 or at.tzinfo is None:
+        raise ValueError(f"Yahoo {symbol} 的數字不對：price={last} prev={prev}")
+    return {"date": at.astimezone(clock.TAIPEI).date(), "last": last, "prev_close": prev}
 
 # ── 配息：個股（上市、上櫃同一支）────────────────────────────────
 

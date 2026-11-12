@@ -156,15 +156,16 @@ def _answer(kind: str, payload: dict) -> str | ImageReply:
         # 個股的殖利率用官方的表，用不到現價（只有表上沒有這支時才要），所以
         # 現價問不到不能讓整則跟著失敗。現價真的用得到卻沒有，yield_percent 會拋錯。
         try:
-            _, current = market.price(sym)
+            _, current, backup = market.price(sym)
         except Exception as exc:  # noqa: BLE001
             log.info("利率：現價問不到，只用官方殖利率（%s）", type(exc).__name__)
-            current = None
+            current, backup = None, False
     else:
-        intraday, current = market.price(sym)
+        intraday, current, backup = market.price(sym)
     if kind == commands.PRICE:
         label = "盤中即時價" if intraday else "當前收盤價"
-        return f"{label}：{_num(current)}" if current else f"{label}：查不到"
+        text = f"{label}：{_num(current)}" if current else f"{label}：查不到"
+        return _with_backup_note(text, backup)
 
     history = market.payouts(sym)
     months = market.period_months(history)
@@ -172,9 +173,21 @@ def _answer(kind: str, payload: dict) -> str | ImageReply:
 
     if kind == commands.RATE:
         how = _PERIOD_TEXT[months] if months else "近兩年沒有配息"
-        return f"配息方式：{how}\n預估年利率：{_num(rate)}%"
+        # 用的是官方殖利率時，現價從哪裡來都不影響這一則，不必標。
+        used_current = market.official_yield(sym) is None
+        return _with_backup_note(f"配息方式：{how}\n預估年利率：{_num(rate)}%",
+                                 backup and used_current)
 
-    return _dividend(sym, payload["holding"], current, history, months, rate)
+    return _with_backup_note(_dividend(sym, payload["holding"], current, history, months, rate),
+                             backup)
+
+
+# 價格來自非官方的備用來源（Yahoo 股市）時，接在回覆最後一行。
+BACKUP_NOTE = "※ 證交所暫時連不上，價格改用 Yahoo 股市的資料"
+
+
+def _with_backup_note(text: str, backup: bool) -> str:
+    return f"{text}\n{BACKUP_NOTE}" if backup else text
 
 
 def _dividend(sym: market.Symbol, holding: tuple[str, float], current: float | None,
