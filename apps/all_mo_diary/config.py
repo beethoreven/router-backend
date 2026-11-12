@@ -1,4 +1,4 @@
-"""The diary's settings, read once from the DIARY__* environment variables (via AppSettings).
+"""The diary's settings, read once from the ALL_MO_DIARY__* environment variables (via AppSettings).
 
 Modules read settings through `config.get()`, never from os.environ. The value is set by
 create_app() before any request, and is also what background threads (the cache loader) read, so

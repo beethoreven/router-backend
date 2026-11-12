@@ -9,7 +9,7 @@ Release, checking and hashing it on the way through.
   that fails any check is deleted from the release again.
 - Every upload gets a new asset name (font id + hash prefix), so an existing file is never replaced
   under phones that installed it.
-- The GitHub token (DIARY__GITHUB_TOKEN) should be a fine-grained token with Contents: read & write on
+- The GitHub token (ALL_MO_DIARY__GITHUB_TOKEN) should be a fine-grained token with Contents: read & write on
   the fonts repository only.
 """
 
@@ -52,7 +52,7 @@ def _release_id(repo: str, token: str) -> int:
     if resp.status_code == 200:
         return int(resp.json()["id"])
     if resp.status_code != 404:
-        raise UploadError(f"GitHub 回應錯誤（{resp.status_code}），請確認 DIARY__FONTS_REPO 與 DIARY__GITHUB_TOKEN", 502)
+        raise UploadError(f"GitHub 回應錯誤（{resp.status_code}），請確認 ALL_MO_DIARY__FONTS_REPO 與 ALL_MO_DIARY__GITHUB_TOKEN", 502)
     resp = requests.post(f"{API}/repos/{repo}/releases", headers=_headers(token), timeout=20,
                          data=json.dumps({"tag_name": TAG, "name": "全心日記", "body": "全心日記的字體檔（由後台上傳）"}))
     if resp.status_code not in (200, 201):
@@ -135,7 +135,7 @@ class _Body:
 def upload(stream, length: int, font_id: int, repo: str, token: str) -> dict:
     """Uploads `length` bytes from `stream` as a new release asset. Returns the info fonts.set_file() takes."""
     if not repo or not token:
-        raise UploadError("後端還沒設定字體的 GitHub repo（DIARY__FONTS_REPO、DIARY__GITHUB_TOKEN）", 503)
+        raise UploadError("後端還沒設定字體的 GitHub repo（ALL_MO_DIARY__FONTS_REPO、ALL_MO_DIARY__GITHUB_TOKEN）", 503)
     if length <= 0:
         raise UploadError("沒有收到檔案")
     release = _release_id(repo, token)

@@ -11,9 +11,9 @@ import pytest
 
 from tests.all_mo_diary.conftest import admin_headers, pass_for
 
-CHECK = "/diary/api/v1/check"
-FEEDBACK = "/diary/api/v1/feedback"
-ADMIN = "/diary/api/admin"
+CHECK = "/all-mo-diary/api/v1/check"
+FEEDBACK = "/all-mo-diary/api/v1/feedback"
+ADMIN = "/all-mo-diary/api/admin"
 
 
 def _check(client, headers=None, **body):
@@ -179,7 +179,7 @@ def test_cors_only_for_the_admin_console(diary):
     assert "Access-Control-Allow-Origin" not in resp.headers
 
 
-@pytest.mark.parametrize("path", ["/diary/api/v1/check", "/diary/api/v1/feedback"])
+@pytest.mark.parametrize("path", ["/all-mo-diary/api/v1/check", "/all-mo-diary/api/v1/feedback"])
 def test_forged_pass_never_touches_the_database(path, monkeypatch, diary_env, db_clean):
     """A well-formed but forged pass is rejected before any database connection."""
     from apps.all_mo_diary import db

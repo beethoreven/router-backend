@@ -1,4 +1,4 @@
-"""Sign-in exchange (POST /diary/api/v1/session) and the stateless app pass."""
+"""Sign-in exchange (POST /all-mo-diary/api/v1/session) and the stateless app pass."""
 
 from __future__ import annotations
 
@@ -8,13 +8,13 @@ from apps.all_mo_diary.auth import app_pass
 from router.root import build
 from shared import google_auth
 
-ENV = {"DIARY__GOOGLE_CLIENT_ID": "web-client.apps.googleusercontent.com", "DIARY__SESSION_SECRET": "s3cret"}
+ENV = {"ALL_MO_DIARY__GOOGLE_CLIENT_ID": "web-client.apps.googleusercontent.com", "ALL_MO_DIARY__SESSION_SECRET": "s3cret"}
 
 
 @pytest.fixture
 def client(monkeypatch):
     def fake_verify(token, client_id):
-        assert client_id == ENV["DIARY__GOOGLE_CLIENT_ID"]
+        assert client_id == ENV["ALL_MO_DIARY__GOOGLE_CLIENT_ID"]
         if token == "good-id-token":
             return {"sub": "1234", "email": "me@example.com"}
         return None
@@ -24,7 +24,7 @@ def client(monkeypatch):
 
 
 def test_good_id_token_gets_a_pass(client):
-    resp = client.post("/diary/api/v1/session", headers={"Authorization": "Bearer good-id-token"})
+    resp = client.post("/all-mo-diary/api/v1/session", headers={"Authorization": "Bearer good-id-token"})
     assert resp.status_code == 200
     body = resp.get_json()
     claims = app_pass.verify("s3cret", body["token"])
@@ -34,12 +34,12 @@ def test_good_id_token_gets_a_pass(client):
 
 def test_bad_or_missing_id_token_is_401_json(client):
     for headers in ({"Authorization": "Bearer nope"}, {}):
-        resp = client.post("/diary/api/v1/session", headers=headers)
+        resp = client.post("/all-mo-diary/api/v1/session", headers=headers)
         assert resp.status_code == 401 and resp.get_json()["code"] == "invalid_token"
 
 
 def test_not_configured_is_503(monkeypatch):
-    resp = build(environ={}).test_client().post("/diary/api/v1/session", headers={"Authorization": "Bearer x"})
+    resp = build(environ={}).test_client().post("/all-mo-diary/api/v1/session", headers={"Authorization": "Bearer x"})
     assert resp.status_code == 503 and resp.get_json()["code"] == "not_configured"
 
 
@@ -50,7 +50,7 @@ def test_google_unreachable_is_503_not_401(monkeypatch):
 
     monkeypatch.setattr(google_auth, "verify", unavailable)
     resp = build(environ=ENV).test_client().post(
-        "/diary/api/v1/session", headers={"Authorization": "Bearer some-id-token"})
+        "/all-mo-diary/api/v1/session", headers={"Authorization": "Bearer some-id-token"})
     assert resp.status_code == 503 and resp.get_json()["code"] == "auth_unavailable"
 
 

@@ -114,6 +114,6 @@ def test_the_real_diary_app_loads():
     service = build(environ={})
     resp = service.test_client().get("/ready")
     assert resp.status_code == 200
-    assert resp.get_json()["apps"]["diary"] == {"loaded": True, "error": None}
-    missing = service.test_client().get("/diary/no-such-page")
+    assert resp.get_json()["apps"]["all-mo-diary"] == {"loaded": True, "error": None}
+    missing = service.test_client().get("/all-mo-diary/no-such-page")
     assert missing.status_code == 404 and missing.get_json()["code"] == "http_404"

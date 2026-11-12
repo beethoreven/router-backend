@@ -1,4 +1,4 @@
-"""The diary app's API (all under /diary): sign-in exchange, daily check, feedback.
+"""The diary app's API (all under /all-mo-diary): sign-in exchange, daily check, feedback.
 
 Errors are {"error": message for people, "code": code}. Every call except /api/v1/session carries our
 own app pass (auth.app_pass); a missing or bad pass is rejected before any quota is used or the

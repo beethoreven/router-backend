@@ -6,10 +6,10 @@
 https://router-backend-3hl2.onrender.com
   /health            保活用，不載入任何 app、不碰資料庫（每 10 分鐘由外部排程打一次）
   /ready             每個 app 載不載得起來（不碰資料庫）
-  /diary/...         全心日記（apps/all_mo_diary）
+  /all-mo-diary/...  全心日記（apps/all_mo_diary）
   /mama-fufood/...   媽媽記副食品（apps/mama_fufood）
-  /mama-stocker/...   LINE 股票資訊 bot（apps/mama_stocker）
-  /fireless-war/...   願浮沉2：無火戰爭（apps/fireless_war）
+  /mama-stocker/...  LINE 股票資訊 bot（apps/mama_stocker）
+  /fireless-war/...  願浮沉2：無火戰爭（apps/fireless_war）
 ```
 
 ## 目錄

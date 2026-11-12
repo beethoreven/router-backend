@@ -23,7 +23,7 @@ case "${1:-start}" in
       "$PGBIN/psql" -h localhost -p "$PORT" -U postgres -tAc "SELECT 1 FROM pg_database WHERE datname='$db'" | grep -q 1 \
         || "$PGBIN/createdb" -h localhost -p "$PORT" -U postgres "$db"
     done
-    echo "DIARY__DATABASE_URL=postgresql://postgres@localhost:$PORT/amd_dev"
+    echo "ALL_MO_DIARY__DATABASE_URL=postgresql://postgres@localhost:$PORT/amd_dev"
     echo "TEST_DATABASE_URL=postgresql://postgres@localhost:$PORT/amd_test"
     ;;
   stop)
