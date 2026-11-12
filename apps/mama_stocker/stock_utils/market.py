@@ -6,9 +6,12 @@ import calendar
 from concurrent.futures import ThreadPoolExecutor, wait
 from dataclasses import dataclass, replace
 from datetime import date, datetime, time, timedelta
+import logging
 from statistics import median
 
 from . import clock, sources
+
+log = logging.getLogger(__name__)
 
 _OPEN, _CLOSE = time(9, 0), time(13, 30)
 
@@ -63,13 +66,24 @@ def price(sym: Symbol) -> tuple[bool, float | None]:
     盤中 = 現在是 9:00～13:30，而且行情資料的日期就是今天。假日與颱風假
     不必另外查行事曆：那種日子行情資料停在上一個交易日，日期對不上。
 
-    ★ 只問即時行情那一支，問不到就拋錯，**不退回每日收盤表**。收盤表要到
-      下午才更新：盤中或剛收盤時拿它的數字，會把昨天的收盤價當成「當前」
-      回出去。慢一點、查不到都可以，數字一定要對。
+    即時行情問不到時，退回每日收盤表，但**只在表上的日期就是最近一次收盤**
+    的時候（見 _latest_close）。盤中、或剛收盤表還沒更新，表上是昨天的收盤價，
+    拿來當「當前」就錯了，那種時候照樣拋錯。慢一點、查不到都可以，數字一定
+    要對。
     """
-    rt = sources.realtime(sym.market, sym.code)
+    try:
+        rt = sources.realtime(sym.market, sym.code)
+    except Exception as exc:  # noqa: BLE001 - 退回收盤表；也退不了就把原本的錯拋出去
+        close = _closing_price(sym)
+        if close is None:
+            raise
+        log.warning("即時行情失敗（%s），改用收盤表：%s", sym.code, type(exc).__name__)
+        return False, close
     if not rt:
-        raise LookupError(f"即時行情沒有 {sym.code} 的資料")
+        close = _closing_price(sym)
+        if close is None:
+            raise LookupError(f"即時行情沒有 {sym.code} 的資料")
+        return False, close
     t = now()
     trading = rt["date"] == t.date() and _OPEN <= t.time() < _CLOSE
     if rt["last"]:
@@ -79,6 +93,36 @@ def price(sym: Symbol) -> tuple[bool, float | None]:
     # 仍然是昨收，所以照「當前收盤價」回——★ 不能標成盤中即時價，那是
     # 2026-10-05 開盤第一天實際發生的錯（見 sources.realtime）。
     return False, rt["prev_close"]
+
+
+def _latest_close(t: datetime) -> date | None:
+    """在 t 這一刻，「最近一次收盤」應該是哪一天；正在開盤中就是 None。
+
+    只看星期幾，不查休市行事曆：國定假日那天會算成「今天有收盤」，收盤表上
+    卻是前一個交易日，日期對不上，結果是查不到，不會回錯的數字。
+    """
+    d = t.date()
+    if d.weekday() < 5:
+        if t.time() >= _CLOSE:
+            return d
+        if t.time() >= _OPEN:
+            return None
+    d -= timedelta(days=1)
+    while d.weekday() >= 5:
+        d -= timedelta(days=1)
+    return d
+
+
+def _closing_price(sym: Symbol) -> float | None:
+    """每日收盤表上的收盤價；表上的日期不是最近一次收盤就是 None。"""
+    latest = _latest_close(now())
+    if latest is None:
+        return None
+    table = sources.twse_quotes if sym.market == "tse" else sources.tpex_quotes
+    row = table().get(sym.code)
+    if not row or row.get("date") != latest:
+        return None
+    return row.get("close")
 
 
 # ── 配息 ─────────────────────────────────────────────────────────
@@ -164,7 +208,8 @@ def yield_percent(sym: Symbol, history: list[Payout], current: float | None) -> 
         if official is not None:
             return official
     if not current:
-        return 0.0
+        # 沒有現價就算不出來。回 0% 會被讀成「這支不配息」，寧可查不到。
+        raise LookupError(f"{sym.code} 沒有現價，算不出殖利率")
     today = now().date()
     paid = sum(p.cash or 0 for p in history
                if today - timedelta(days=365) < p.ex_date <= today)

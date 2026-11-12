@@ -10,6 +10,11 @@
     櫃買 ETF 訊息中心   info.tpex.org.tw          上櫃 ETF 的發放日
     公開資訊觀測站      mopsov.twse.com.tw        個股的除息日、發放日、金額
 
+★ mis.twse.com.tw 從 Render 連不到：2026-11-12 起，TCP 連得上，但送出請求後
+  對方不回任何 HTTP 就斷線（RemoteDisconnected）；同一時間本機用一模一樣的
+  請求正常，其他網站從 Render 也都正常。2026-10-05 從 Render 還連得到。
+  即時行情失敗時怎麼退，見 market.price。
+
 ## 快取
 
 這些資料一天只變一次（收盤後）或偶爾才有新公告，所以整包抓下來放記憶體，
@@ -211,21 +216,36 @@ def number(s) -> float | None:
 
 # ── 全市場：代號、名稱、收盤價 ───────────────────────────────────
 
+def _day(rows: list[dict]):
+    """收盤表每一列的 Date 欄位 → date。整張表通常是同一天，同一個字串只解析一次。"""
+    seen: dict[str, date | None] = {}
+
+    def of(r: dict) -> date | None:
+        s = r.get("Date") or ""
+        if s not in seen:
+            seen[s] = roc_date(s)
+        return seen[s]
+    return of
+
+
 def twse_quotes() -> dict[str, dict]:
-    """上市。{代號: {name, close}}，含 ETF。"""
+    """上市。{代號: {name, close, date}}，含 ETF。date 是 close 屬於哪個交易日。"""
     def load():
         rows = _get_json("https://openapi.twse.com.tw/v1/exchangeReport/STOCK_DAY_ALL")
-        return {r["Code"].strip(): {"name": r["Name"].strip(), "close": number(r["ClosingPrice"])}
+        day = _day(rows)
+        return {r["Code"].strip(): {"name": r["Name"].strip(), "close": number(r["ClosingPrice"]),
+                                    "date": day(r)}
                 for r in rows}
     return _cached(("twse_quotes",), _TTL, load)
 
 
 def tpex_quotes() -> dict[str, dict]:
-    """上櫃。{代號: {name, close}}，含 ETF（也含權證，沒有濾掉——沒人會問）。"""
+    """上櫃。{代號: {name, close, date}}，含 ETF（也含權證，沒有濾掉——沒人會問）。"""
     def load():
         rows = _get_json("https://www.tpex.org.tw/openapi/v1/tpex_mainboard_daily_close_quotes")
+        day = _day(rows)
         return {r["SecuritiesCompanyCode"].strip():
-                {"name": r["CompanyName"].strip(), "close": number(r["Close"])}
+                {"name": r["CompanyName"].strip(), "close": number(r["Close"]), "date": day(r)}
                 for r in rows}
     # 這一包有 4.6 MB（連權證都在裡面），Render 上實測要 6～7 秒，貼著預設的
     # 8 秒期限，所以給它寬一點。

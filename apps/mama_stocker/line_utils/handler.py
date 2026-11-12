@@ -152,7 +152,16 @@ def _answer(kind: str, payload: dict) -> str | ImageReply:
     if kind == commands.TREND:
         return ImageReply.trend(sym.code)
 
-    intraday, current = market.price(sym)
+    if kind == commands.RATE:
+        # 個股的殖利率用官方的表，用不到現價（只有表上沒有這支時才要），所以
+        # 現價問不到不能讓整則跟著失敗。現價真的用得到卻沒有，yield_percent 會拋錯。
+        try:
+            _, current = market.price(sym)
+        except Exception as exc:  # noqa: BLE001
+            log.info("利率：現價問不到，只用官方殖利率（%s）", type(exc).__name__)
+            current = None
+    else:
+        intraday, current = market.price(sym)
     if kind == commands.PRICE:
         label = "盤中即時價" if intraday else "當前收盤價"
         return f"{label}：{_num(current)}" if current else f"{label}：查不到"
