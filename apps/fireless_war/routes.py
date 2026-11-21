@@ -1,18 +1,22 @@
 """fireless-war's endpoints (under /fireless-war). The web page calls them with
 `Authorization: Bearer <Google ID token>` on every request.
 
-    GET  /auth/status    is this token valid, and is this email a GM?
-    GET  /record         find a session file by date-time       (GM)
-    POST /record         copy the template into a new one       (GM)
+    GET  /auth/status    is this token valid, and is this email a GM?   (10/min per sign-in)
+    GET  /record         find a session file by date-time       (GM, 10/min site-wide)
+    POST /record         copy the template into a new one       (GM, 3/min and 20/hour site-wide)
     GET  /round          one round's character table            (GM, 30/min site-wide)
     GET  /demo-record    same as /record, FirelessWar_Demo_*    (any Google sign-in, 10/hour)
     POST /demo-record    copy FirelessWar_Demo                  (any Google sign-in, 10/hour)
-    GET  /demo-round     /round with generic character names    (any Google sign-in, 10/min)
+    GET  /demo-round     /round, demo session files only        (any Google sign-in, 10/min)
     GET  /ready          which required settings are missing (names only)
 
-Rate limits are site-wide counters ("global" key), not per IP: what they protect is the shared Google
-quota (60 Sheets reads/min per service account), and the router keeps no IPs. Each route has its own
-counter. deduct_when skips 401/503 so unsigned requests can't use up the GMs' quota.
+Rate limits are site-wide counters ("global" key), not per IP: what they protect is shared — the
+Google quota (60 Sheets reads/min per service account), the owner's Apps Script and Drive, and the
+router's 16 threads, which every app shares (a /record call can hold one for up to 30 s) — and the
+router keeps no IPs. Each route has its own counter. deduct_when skips 401/503 so unsigned requests
+can't use up the GMs' quota. /auth/status answers any valid Google sign-in (the demo's included), so
+its counter is per sign-in instead: one account calling it can't lock the GMs out.
+CORS preflights never reach these counters: Flask answers OPTIONS itself, without calling the view.
 
 Error bodies: {"error": message for people, "code": ...}. For an unexpected failure only our own
 human-written messages (RuntimeError, e.g. Apps Script's error text or a bad cell value) reach the
@@ -21,6 +25,7 @@ client; anything else shows its type name, so URLs or ids inside library errors 
 
 from __future__ import annotations
 
+import hashlib
 import logging
 
 from flask import Flask, g, jsonify, request
@@ -28,13 +33,19 @@ from flask_limiter import Limiter
 
 from shared import google_auth
 
-from . import auth, config, parse_data, record_data
+from . import auth, config, google_access, parse_data, record_data
 
 log = logging.getLogger(__name__)
 
 
 def _counts(response) -> bool:
     return response.status_code not in (401, 503)
+
+
+def _sign_in_key() -> str:
+    """Counter key for /auth/status: a hash of the bearer token, so the token itself isn't kept."""
+    token = google_auth.extract_bearer_token(request) or ""
+    return "sign-in:" + hashlib.sha256(token.encode()).hexdigest()
 
 
 def _error(status: int, code: str, message: str):
@@ -53,6 +64,7 @@ def register(app: Flask, limiter: Limiter) -> None:
         return jsonify({"ok": not missing, "missing": missing}), 200 if not missing else 503
 
     @app.get("/auth/status")
+    @limiter.limit("10 per minute", key_func=_sign_in_key, deduct_when=_counts)
     def auth_status():
         """200 + authorized true/false is a normal answer; 401 only when the token itself is invalid."""
         try:
@@ -106,9 +118,13 @@ def register(app: Flask, limiter: Limiter) -> None:
         day, type_ = request.args.get("day"), request.args.get("type")
         if not day or not type_:
             return _error(400, "missing_param", msgs["missing_round"])
-        spreadsheet_id = request.args.get("spreadsheet_id") or config.get().spreadsheet_id
+        # The demo reads only a session file /demo-record gave it: no fallback to the configured sheet,
+        # and the file's name must mark it as a demo copy (checked below).
+        spreadsheet_id = request.args.get("spreadsheet_id") or ("" if demo else config.get().spreadsheet_id)
         if not spreadsheet_id:
             return _error(400, "missing_param", msgs["missing_sheet"])
+        if not google_access.is_valid_spreadsheet_id(spreadsheet_id):
+            return _error(400, "invalid_param", msgs["invalid_sheet"])
         try:
             # The validation messages are shared with the demo on purpose: the page only sends valid
             # day/type pairs, so no demo user sees them.
@@ -117,17 +133,21 @@ def register(app: Flask, limiter: Limiter) -> None:
             return _error(400, "invalid_param", str(e))
         slugs = parse_data.DEMO_CHARACTER_SLUGS if demo else None
         try:
+            if demo and not record_data.is_demo_record(spreadsheet_id):
+                return _error(403, "not_demo_file", msgs["not_demo_file"])
             result = parse_data.build_round_response(day, type_, spreadsheet_id, character_slugs=slugs)
         except Exception as e:  # noqa: BLE001 — sheet unreachable, tab missing, bad cell value…
             return _error(500, "google_error", msgs["round_failed"] + _describe(e))
         return jsonify(result), 200
 
     @app.get("/record", endpoint="get_record")
+    @limiter.limit("10 per minute", deduct_when=_counts)
     @auth.require_gm
     def get_record():
         return _find(demo=False)
 
     @app.post("/record", endpoint="create_record")
+    @limiter.limit("3 per minute;20 per hour", deduct_when=_counts)
     @auth.require_gm
     def create_record():
         return _create(demo=False)
@@ -163,6 +183,7 @@ GM_MESSAGES = {
     "missing_datetime": "缺少必要參數 datetime",
     "missing_round": "缺少必要參數 day 或 type",
     "missing_sheet": "缺少必要參數 spreadsheet_id",
+    "invalid_sheet": "spreadsheet_id 格式不正確",
     "not_found": "查無此場次檔案",
     "find_failed": "查詢場次檔案時發生錯誤:",
     "create_failed": "建立場次檔案時發生錯誤:",
@@ -173,6 +194,8 @@ DEMO_MESSAGES = {
     "missing_datetime": "Missing required parameter: datetime",
     "missing_round": "Missing required parameter: day or type",
     "missing_sheet": "Missing required parameter: spreadsheet_id",
+    "invalid_sheet": "Invalid spreadsheet_id",
+    "not_demo_file": "That spreadsheet is not a demo session file",
     "not_found": "No demo session file found for that date/time",
     "find_failed": "Error looking up the demo session file: ",
     "create_failed": "Error creating the demo session file: ",

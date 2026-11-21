@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import types
+
+import limits.storage.memory
 import pytest
 
 from apps.fireless_war import google_access
@@ -10,6 +13,17 @@ from router.settings import ConfigError
 from .conftest import ENV, GM, STRANGER
 
 P = "/fireless-war"
+DEMO_TITLE = "FirelessWar_Demo_2026_07_01_18_30"
+PREFLIGHT = {"Origin": ENV["FIRELESS_WAR__ALLOWED_ORIGINS"].split(",")[0], "Access-Control-Request-Method": "GET",
+             "Access-Control-Request-Headers": "Authorization"}
+
+
+@pytest.fixture
+def clock(monkeypatch):
+    """Rate-limit time travel: clock.advance(seconds) moves the counters' clock forward."""
+    now = [1_000_000.0]
+    monkeypatch.setattr(limits.storage.memory, "time", types.SimpleNamespace(time=lambda: now[0]))
+    return types.SimpleNamespace(advance=lambda seconds: now.__setitem__(0, now[0] + seconds))
 
 
 # ---- sign-in ---------------------------------------------------------------------------------------
@@ -79,6 +93,23 @@ def test_get_record_not_found_and_bad_datetime(client, monkeypatch):
     assert resp.status_code == 400 and resp.get_json()["code"] == "invalid_param"
     resp = client.get(f"{P}/record", headers=GM)
     assert resp.status_code == 400 and resp.get_json()["code"] == "missing_param"
+
+
+@pytest.mark.parametrize("value", [
+    "2026_07_01_18_30\n",                 # "$" would accept a trailing newline
+    "２０２６_０７_０１_１８_３０",          # full-width digits
+    "٢٠٢٦_٠٧_٠١_١٨_٣٠",                    # Arabic-Indic digits ("\d" accepts both)
+    "2026_07_01_18_301",
+    " 2026_07_01_18_30",
+])
+def test_datetime_must_be_exactly_ascii_digits(client, monkeypatch, value):
+    calls = []
+    monkeypatch.setattr(google_access, "find_file_by_name", lambda name, folder: calls.append(name))
+    monkeypatch.setattr(google_access.requests, "post", lambda *a, **k: calls.append("post"))
+    for method in ("get", "post"):
+        resp = getattr(client, method)(f"{P}/record", query_string={"datetime": value}, headers=GM)
+        assert resp.status_code == 400 and resp.get_json()["code"] == "invalid_param"
+    assert calls == []
 
 
 def test_a_value_error_deep_inside_google_is_500_not_a_bad_datetime(client, monkeypatch):
@@ -193,9 +224,53 @@ def test_round_bad_params_and_bad_cells(client, monkeypatch):
 
 def test_demo_round_uses_the_generic_names(client, monkeypatch):
     rows = [["Character A", "A", "1", "0", "0", "0", "0", "", "0", "0"], ["鬼原響介", "x", "9", "0", "0", "0", "0", "", "0", "0"]]
+    monkeypatch.setattr(google_access, "spreadsheet_title", lambda sid: DEMO_TITLE)
     monkeypatch.setattr(google_access, "sheet_batch_read", lambda ranges, sid: _sheet(rows))
     body = client.get(f"{P}/demo-round?day=1st&type=Morning&spreadsheet_id=s", headers=STRANGER).get_json()
     assert list(body["business_level"]) == ["oniwara"] and body["business_level"]["oniwara"]["general_business"] == 1
+
+
+@pytest.mark.parametrize("title,status", [
+    (DEMO_TITLE, 200),
+    ("FirelessWar_2026_07_01_18_30", 403),           # a real game's session file
+    ("FirelessWar_Demo", 403),                       # the demo template itself
+    ("FirelessWar_Demo_2026_07_01_18_30 (1)", 403),
+    ("Budget 2026", 403),
+])
+def test_demo_round_reads_only_demo_session_files(client, monkeypatch, title, status):
+    reads = []
+    monkeypatch.setattr(google_access, "spreadsheet_title", lambda sid: title)
+    monkeypatch.setattr(google_access, "sheet_batch_read", lambda ranges, sid: reads.append(sid) or _sheet([]))
+    resp = client.get(f"{P}/demo-round?day=1st&type=Morning&spreadsheet_id=other-sheet", headers=STRANGER)
+    assert resp.status_code == status, resp.get_json()
+    if status == 403:
+        assert resp.get_json()["code"] == "not_demo_file" and reads == []
+    # A GM's /round is unchanged: it reads whatever session file it is given.
+    assert client.get(f"{P}/round?day=1st&type=Morning&spreadsheet_id=other-sheet", headers=GM).status_code == 200
+
+
+def test_demo_round_never_falls_back_to_the_configured_sheet(make_client, monkeypatch):
+    touched = []
+    monkeypatch.setattr(google_access, "spreadsheet_title", lambda sid: touched.append(sid) or DEMO_TITLE)
+    monkeypatch.setattr(google_access, "sheet_batch_read", lambda ranges, sid: touched.append(sid) or _sheet([]))
+    client = make_client({**ENV, "FIRELESS_WAR__SPREADSHEET_ID": "production-sheet"})
+    resp = client.get(f"{P}/demo-round?day=1st&type=Morning", headers=STRANGER)
+    assert resp.status_code == 400 and resp.get_json()["code"] == "missing_param"
+    assert touched == []
+
+
+@pytest.mark.parametrize("sheet_id", ["a/b", "../x", "a?alt=media", "a b", "a%2Fb", "x" * 129, "abc\n"])
+def test_spreadsheet_ids_outside_the_safe_characters_never_reach_google(client, monkeypatch, sheet_id):
+    touched = []
+    monkeypatch.setattr(google_access, "spreadsheet_title", lambda sid: touched.append(sid) or DEMO_TITLE)
+    monkeypatch.setattr(google_access, "sheet_batch_read", lambda ranges, sid: touched.append(sid) or _sheet([]))
+    for path, headers in (("/round", GM), ("/demo-round", STRANGER)):
+        resp = client.get(f"{P}{path}", query_string={"day": "1st", "type": "Morning", "spreadsheet_id": sheet_id},
+                          headers=headers)
+        assert resp.status_code == 400 and resp.get_json()["code"] == "invalid_param", (path, resp.get_json())
+    assert touched == []
+    ok = client.get(f"{P}/round?day=1st&type=Morning&spreadsheet_id=1bM_n6-Ab9", headers=GM)
+    assert ok.status_code == 200 and touched == ["1bM_n6-Ab9"]
 
 
 def test_round_limit_is_site_wide_and_rejected_sign_ins_dont_use_it(client, monkeypatch):
@@ -208,6 +283,7 @@ def test_round_limit_is_site_wide_and_rejected_sign_ins_dont_use_it(client, monk
     resp = client.get(url, headers={"Authorization": "Bearer tok:other-gm@example.com"})
     assert resp.status_code == 429 and resp.get_json()["code"] == "http_429"
     # The demo has its own counter.
+    monkeypatch.setattr(google_access, "spreadsheet_title", lambda sid: DEMO_TITLE)
     assert client.get(f"{P}/demo-round?day=1st&type=Morning&spreadsheet_id=s", headers=GM).status_code == 200
 
 
@@ -217,6 +293,85 @@ def test_demo_record_limit_is_ten_an_hour_per_route(client, monkeypatch):
     for _ in range(10):
         assert client.get(url, headers=STRANGER).status_code == 200
     assert client.get(url, headers=STRANGER).status_code == 429
+
+
+def test_get_record_limit_is_site_wide_and_rejected_sign_ins_dont_use_it(client, monkeypatch, clock):
+    monkeypatch.setattr(google_access, "find_file_by_name", lambda name, folder: "sid")
+    url = f"{P}/record?datetime=2026_07_01_18_30"
+    for _ in range(15):
+        assert client.get(url, headers=STRANGER).status_code == 401
+        assert client.get(url, headers={"Authorization": "Bearer down"}).status_code == 503
+    for _ in range(10):
+        assert client.get(url, headers=GM).status_code == 200
+    resp = client.get(url, headers={"Authorization": "Bearer tok:other-gm@example.com"})
+    assert resp.status_code == 429 and resp.get_json()["code"] == "http_429"
+    clock.advance(61)
+    assert client.get(url, headers=GM).status_code == 200
+
+
+def _apps_script_ok(monkeypatch):
+    class Reply:
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return {"statusCode": 200, "spreadsheet_id": "new-sid"}
+
+    monkeypatch.setattr(google_access.requests, "post", lambda url, json, timeout: Reply())
+
+
+def test_create_record_limit_is_three_a_minute_and_twenty_an_hour(client, monkeypatch, clock):
+    _apps_script_ok(monkeypatch)
+    url = f"{P}/record?datetime=2026_07_01_18_30"
+    for _ in range(10):
+        assert client.post(url, headers=STRANGER).status_code == 401
+    created = 0
+    for _ in range(6):                      # 6 minutes x 3 = 18 within the hour
+        for _ in range(3):
+            assert client.post(url, headers=GM).status_code == 201
+            created += 1
+        assert client.post(url, headers=GM).status_code == 429
+        clock.advance(61)
+    for _ in range(2):
+        assert client.post(url, headers=GM).status_code == 201
+        created += 1
+    assert created == 20
+    clock.advance(61)
+    assert client.post(url, headers=GM).status_code == 429, "the hourly cap should still hold"
+    clock.advance(3600)
+    assert client.post(url, headers=GM).status_code == 201
+
+
+def test_auth_status_limit_is_per_sign_in(client, clock):
+    a, b = {"Authorization": "Bearer tok:gm@example.com"}, {"Authorization": "Bearer tok:someone@example.com"}
+    for _ in range(30):
+        assert client.get(f"{P}/auth/status", headers={"Authorization": "Bearer junk"}).status_code == 401
+        assert client.get(f"{P}/auth/status", headers={"Authorization": "Bearer down"}).status_code == 503
+    for _ in range(10):
+        assert client.get(f"{P}/auth/status", headers=a).status_code == 200
+    resp = client.get(f"{P}/auth/status", headers=a)
+    assert resp.status_code == 429 and resp.get_json()["code"] == "http_429"
+    # Another sign-in (here a non-GM, as anyone can get through the demo) has its own counter...
+    for _ in range(10):
+        assert client.get(f"{P}/auth/status", headers=b).status_code == 200
+    assert client.get(f"{P}/auth/status", headers=b).status_code == 429
+    # ...and the GM's own counter recovers after a minute.
+    clock.advance(61)
+    assert client.get(f"{P}/auth/status", headers=a).status_code == 200
+
+
+def test_preflights_never_use_a_counter(client, monkeypatch):
+    monkeypatch.setattr(google_access, "find_file_by_name", lambda name, folder: "sid")
+    monkeypatch.setattr(google_access, "sheet_batch_read", lambda ranges, sid: _sheet([]))
+    _apps_script_ok(monkeypatch)
+    paths = ["/auth/status", "/record?datetime=2026_07_01_18_30", "/round?day=1st&type=Morning&spreadsheet_id=s"]
+    for path in paths:
+        for _ in range(40):
+            assert client.options(f"{P}{path}", headers=PREFLIGHT).status_code == 200
+    assert client.get(f"{P}/auth/status", headers=GM).status_code == 200
+    assert client.get(f"{P}/record?datetime=2026_07_01_18_30", headers=GM).status_code == 200
+    assert client.post(f"{P}/record?datetime=2026_07_01_18_30", headers=GM).status_code == 201
+    assert client.get(f"{P}/round?day=1st&type=Morning&spreadsheet_id=s", headers=GM).status_code == 200
 
 
 # ---- settings, CORS --------------------------------------------------------------------------------

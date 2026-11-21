@@ -36,7 +36,8 @@ def create_app(settings: AppSettings):
 
     app = new_app(__name__, max_content_length=MAX_CONTENT_LENGTH)
     allow_cors(app, cfg.allowed_origins, methods=("GET", "POST"))
-    # One shared counter per route for the whole site (see routes.py); memory storage, single worker.
+    # Site-wide counters per route, except /auth/status (per sign-in; see routes.py); memory storage,
+    # single worker.
     # ★ An exception to "no threads in create_app", acceptable because limits' MemoryStorage starts only
     #   a 0.01 s threading.Timer that expires in-memory counters (no network, no locks beyond its own),
     #   and create_app runs lazily inside the worker, not in gunicorn's master process. Keep it here,

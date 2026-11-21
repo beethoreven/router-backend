@@ -117,3 +117,43 @@ def test_sheets_client_gets_a_timeout_and_spreadsheets_are_reused(monkeypatch):
     finally:
         google_access.service_account.reset()
         config.set_current(config.FirelessWarConfig())
+
+
+def test_a_bad_spreadsheet_id_never_reaches_gspread(monkeypatch):
+    import pytest
+
+    opened = []
+    monkeypatch.setattr(google_access.service_account, "_sheets_client",
+                        lambda: type("C", (), {"open_by_key": lambda self, sid: opened.append(sid)})())
+    for bad in ("a/b", "x?alt=media", "", "x" * 129, None, "abc\n"):
+        with pytest.raises(ValueError):
+            google_access.service_account.spreadsheet(bad)
+    assert opened == []
+
+
+def test_the_spreadsheet_cache_is_capped_and_keeps_recently_used(monkeypatch):
+    opened = []
+
+    class Client:
+        def open_by_key(self, sid):
+            opened.append(sid)
+            return f"sheet:{sid}"
+
+    monkeypatch.setattr(google_access.service_account, "_sheets_client", lambda: Client())
+    monkeypatch.setattr(google_access, "MAX_CACHED_SPREADSHEETS", 3)
+    google_access.service_account.reset()
+    try:
+        sa = google_access.service_account
+        for sid in ("a", "b", "c"):
+            sa.spreadsheet(sid)
+        sa.spreadsheet("a")                 # "a" is now the most recently used
+        sa.spreadsheet("d")                 # evicts "b", the least recently used
+        assert list(sa._spreadsheets) == ["c", "a", "d"]
+        sa.spreadsheet("a")
+        sa.spreadsheet("b")                 # reopened: it had been evicted
+        assert opened == ["a", "b", "c", "d", "b"]
+        for i in range(20):
+            sa.spreadsheet(f"sheet-{i}")
+        assert len(sa._spreadsheets) == 3
+    finally:
+        google_access.service_account.reset()

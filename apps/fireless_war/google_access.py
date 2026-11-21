@@ -14,7 +14,9 @@ Two paths on purpose:
 
 from __future__ import annotations
 
+import re
 import threading
+from collections import OrderedDict
 
 import gspread
 import requests
@@ -29,6 +31,16 @@ TOKEN_REFRESH_TIMEOUT_SECONDS = 10
 # Copying the template is the slowest call; Apps Script answers only once the copy exists.
 APPS_SCRIPT_TIMEOUT_SECONDS = 30
 
+# A Google file id is letters, digits, "-" and "_". gspread puts the id into the request URL without
+# escaping it, so anything else is refused before it gets that far.
+_SPREADSHEET_ID = re.compile(r"[A-Za-z0-9_-]{1,128}")
+# Few spreadsheets are open at once (one per game); the cap stops arbitrary ids from growing the cache.
+MAX_CACHED_SPREADSHEETS = 32
+
+
+def is_valid_spreadsheet_id(value: object) -> bool:
+    return isinstance(value, str) and _SPREADSHEET_ID.fullmatch(value) is not None
+
 
 class ServiceAccount:
     """Lazily built service-account credentials, gspread client and Drive session (one set per process)."""
@@ -41,11 +53,12 @@ class ServiceAccount:
         self._credentials = None
         self._sheets = None
         self._drive = None
-        self._spreadsheets: dict[str, gspread.Spreadsheet] = {}
+        # Least recently used first; trimmed to MAX_CACHED_SPREADSHEETS.
+        self._spreadsheets: OrderedDict[str, gspread.Spreadsheet] = OrderedDict()
 
-    # ★ The lock only guards building these objects in memory (no network: credentials refresh on
-    #   their first request, outside it). open_by_key fetches from Google, so it runs unlocked; two
-    #   threads may both open the same sheet once, and setdefault keeps the first.
+    # ★ The lock only guards in-memory work: building these objects (credentials refresh on their first
+    #   request, outside it) and the spreadsheet cache's bookkeeping. open_by_key fetches from Google, so
+    #   it runs unlocked; two threads may both open the same sheet once, and setdefault keeps the first.
 
     def _creds(self) -> Credentials:
         if self._credentials is None:
@@ -71,11 +84,20 @@ class ServiceAccount:
             return self._sheets
 
     def spreadsheet(self, spreadsheet_id: str) -> gspread.Spreadsheet:
-        cached = self._spreadsheets.get(spreadsheet_id)
-        if cached is not None:
-            return cached
+        if not is_valid_spreadsheet_id(spreadsheet_id):
+            raise ValueError("not a spreadsheet id")
+        with self._lock:
+            cached = self._spreadsheets.get(spreadsheet_id)
+            if cached is not None:
+                self._spreadsheets.move_to_end(spreadsheet_id)
+                return cached
         opened = self._sheets_client().open_by_key(spreadsheet_id)
-        return self._spreadsheets.setdefault(spreadsheet_id, opened)
+        with self._lock:
+            cached = self._spreadsheets.setdefault(spreadsheet_id, opened)
+            self._spreadsheets.move_to_end(spreadsheet_id)
+            while len(self._spreadsheets) > MAX_CACHED_SPREADSHEETS:
+                self._spreadsheets.popitem(last=False)
+            return cached
 
 
 service_account = ServiceAccount()
@@ -89,6 +111,11 @@ def sheet_batch_read(ranges: list[str], spreadsheet_id: str) -> list[list]:
     """
     result = service_account.spreadsheet(spreadsheet_id).values_batch_get(ranges)
     return [vr.get("values", []) for vr in result.get("valueRanges", [])]
+
+
+def spreadsheet_title(spreadsheet_id: str) -> str:
+    """The spreadsheet's name (its Drive file name), from the metadata fetched when it was opened."""
+    return service_account.spreadsheet(spreadsheet_id).title
 
 
 def _escape_query_value(value: str) -> str:
