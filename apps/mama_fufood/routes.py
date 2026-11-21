@@ -23,6 +23,7 @@ from shared.textutil import graphemes
 
 from . import cache, config, db, export_formats
 from . import feedback as feedback_db
+from . import textutil
 from .auth import app_pass, rejections, secret
 from .textutil import parse_version
 
@@ -199,6 +200,9 @@ def _short_text(body: dict, key: str, max_len: int, required: bool = True) -> st
 def _parse_feedback(body) -> dict:
     if not isinstance(body, dict):
         raise payload.PayloadError("內容格式不對")
+    # 存不進資料庫的字(NUL、落單的代理字元)先擋掉,不然寫入時會變成 500。
+    if textutil.contains(body, textutil.UNSTORABLE):
+        raise payload.PayloadError("內容有無法處理的字元，請刪掉特殊符號後再送出")
     fid = body.get("id")
     if not isinstance(fid, str) or not _UUID4.match(fid):
         raise payload.PayloadError("意見回饋編號的格式不對")
@@ -251,15 +255,18 @@ def _parse_feedback(body) -> dict:
 
 @bp.post("/api/v1/feedback")
 def submit_feedback():
-    """收一則意見回饋。重送同一個編號回 200 duplicate,不重複扣額度。"""
+    """收一則意見回饋。重送同一個編號回 200 duplicate,不重複扣額度。
+
+    ★ 先驗證登入憑證,才讀內容(最多約 1.6 MB):沒有有效憑證的請求不讀、不解析那一大包。
+    """
+    claims, err = _identify()
+    if err:
+        return err
     try:
         body = payload.read_json(request, FEEDBACK_MAX_BODY)
     except payload.PayloadError as exc:
         rejections.note("內容不合")
         return _error(exc.status, exc.code, str(exc))
-    claims, err = _identify()
-    if err:
-        return err
     try:
         row = _parse_feedback(body)
     except payload.PayloadError as exc:
@@ -343,6 +350,9 @@ def convert():
             return _error(409, "already_current", "這個檔案已經是最新格式，不需要轉換")
         if version not in export_formats.DEFINITIONS or version > export_formats.CURRENT:
             return _error(400, "unsupported_format", "不支援這個格式版本")
+        # 落單的代理字元轉不成 UTF-8,轉換結果會寫不出去:扣次數之前先擋下。
+        if textutil.contains(data, textutil.UNENCODABLE):
+            return _error(422, "invalid_file", "檔案內容不符合格式", errors=["檔案裡有無法處理的字元"])
         errors = export_formats.validate(data, version)
         if errors:
             return _error(422, "invalid_file", "檔案內容不符合格式", errors=errors[:20])

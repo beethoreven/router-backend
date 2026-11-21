@@ -1,8 +1,9 @@
 """管理後台的 API。
 
-除了 /api/admin/login,每一支都掛 require_admin。寫入一律只取白名單欄位
+除了 /api/admin/login 與 /api/admin/logout,每一支都掛 require_admin。寫入一律只取白名單欄位
 (datasets.py、app_config.py、feedback.py),不把請求內容直接交給資料庫。
 登入、session 與管理員名單是 shared.admin_auth(auth.admin)。
+每一次修改都在同一個交易裡留下操作紀錄(audit.py),修改失敗就不留。
 """
 
 from __future__ import annotations
@@ -15,7 +16,7 @@ from shared import google_auth, payload
 from shared.admin_auth import normalize_email
 from shared.quota import DailyCounter
 
-from . import app_config, cache, config, datasets, db
+from . import app_config, audit, cache, config, datasets, db, textutil
 from . import feedback as feedback_db
 from .auth import admin, rejections
 
@@ -37,7 +38,37 @@ def _body() -> dict:
     data = payload.read_json(request, ADMIN_MAX_BODY)
     if not isinstance(data, dict):
         raise payload.PayloadError("內容格式不對")
+    # 存不進資料庫的字(NUL、落單的代理字元)先擋掉,不然寫入時會變成 500。
+    if textutil.contains(data, textutil.UNSTORABLE):
+        raise payload.PayloadError("內容有無法處理的字元，請刪掉特殊符號後再送出")
     return data
+
+
+# 操作紀錄只留這些欄位,和 datasets.py 真正寫進資料庫的欄位一致。
+_AUDIT_FIELDS = {
+    "group_create": ("name", "emoji", "sort"),
+    "group_update": ("name", "emoji", "sort", "disabled"),
+    "food_create": ("group_id", "name", "emoji", "sort"),
+    "food_update": ("group_id", "name", "emoji", "sort", "disabled"),
+    "unit_create": ("name", "sort"),
+    "unit_update": ("name", "sort", "disabled", "default"),
+}
+
+
+def _picked(action: str, body: dict) -> dict:
+    return {k: body[k] for k in _AUDIT_FIELDS[action] if k in body}
+
+
+def _audited(action: str, detail: dict, fn, *args):
+    """在同一個交易裡做這次修改並留下操作紀錄:修改失敗(丟例外、回滾)就不會留下紀錄。
+    fn 回傳新項目的 ID 時,也記進紀錄。"""
+    with db.connection() as conn:
+        with conn.cursor() as cur:
+            result = fn(cur, *args)
+            if isinstance(result, int) and not isinstance(result, bool):
+                detail = {"id": result, **detail}
+            audit.record(cur, g.admin_email, action, detail)
+    return result
 
 
 @bp.errorhandler(payload.PayloadError)
@@ -73,6 +104,7 @@ def login():
                 return _error(403, "forbidden", "這個帳號不是管理員")
             admin.sessions.purge_expired(cur)
             token = admin.sessions.create(cur, claims["email"])
+            audit.record(cur, claims["email"], "login")
     return jsonify({"token": token, "email": claims["email"]})
 
 
@@ -85,6 +117,24 @@ def logout():
                 admin.sessions.delete(cur, token)
     admin.forget(token)
     return jsonify({"ok": True})
+
+
+@bp.post("/logout-all")
+@require_admin
+def logout_all():
+    """登出這個管理員在所有瀏覽器上的後台(包含這一台)。懷疑登入狀態外流時用。"""
+    email = g.admin_email
+
+    def _logout_all(cur):
+        admin.sessions.delete_for_email(cur, email)
+        count = cur.rowcount
+        audit.record(cur, email, "logout_all", {"sessions": count})
+        return count
+
+    count = _edit(_logout_all)
+    # 交易完成之後才清快取:清早了,別的請求可能在刪除生效前又把舊的 session 放回快取。
+    admin.forget_all()
+    return jsonify({"ok": True, "sessions": count})
 
 
 @bp.get("/me")
@@ -134,60 +184,69 @@ def _edit(fn, *args):
 @bp.post("/groups")
 @require_admin
 def create_group():
-    return jsonify({"id": _edit(datasets.create_group, _body())}), 201
+    body = _body()
+    new_id = _audited("group_create", _picked("group_create", body), datasets.create_group, body)
+    return jsonify({"id": new_id}), 201
 
 
 @bp.patch("/groups/<int:item_id>")
 @require_admin
 def update_group(item_id: int):
-    _edit(datasets.update_group, item_id, _body())
+    body = _body()
+    _audited("group_update", {"id": item_id, **_picked("group_update", body)}, datasets.update_group, item_id, body)
     return jsonify({"ok": True})
 
 
 @bp.delete("/groups/<int:item_id>")
 @require_admin
 def delete_group(item_id: int):
-    _edit(datasets.delete_group, item_id)
+    _audited("group_delete", {"id": item_id}, datasets.delete_group, item_id)
     return jsonify({"ok": True})
 
 
 @bp.post("/foods")
 @require_admin
 def create_food():
-    return jsonify({"id": _edit(datasets.create_food, _body())}), 201
+    body = _body()
+    new_id = _audited("food_create", _picked("food_create", body), datasets.create_food, body)
+    return jsonify({"id": new_id}), 201
 
 
 @bp.patch("/foods/<int:item_id>")
 @require_admin
 def update_food(item_id: int):
-    _edit(datasets.update_food, item_id, _body())
+    body = _body()
+    _audited("food_update", {"id": item_id, **_picked("food_update", body)}, datasets.update_food, item_id, body)
     return jsonify({"ok": True})
 
 
 @bp.delete("/foods/<int:item_id>")
 @require_admin
 def delete_food(item_id: int):
-    _edit(datasets.delete_food, item_id)
+    _audited("food_delete", {"id": item_id}, datasets.delete_food, item_id)
     return jsonify({"ok": True})
 
 
 @bp.post("/units")
 @require_admin
 def create_unit():
-    return jsonify({"id": _edit(datasets.create_unit, _body())}), 201
+    body = _body()
+    new_id = _audited("unit_create", _picked("unit_create", body), datasets.create_unit, body)
+    return jsonify({"id": new_id}), 201
 
 
 @bp.patch("/units/<int:item_id>")
 @require_admin
 def update_unit(item_id: int):
-    _edit(datasets.update_unit, item_id, _body())
+    body = _body()
+    _audited("unit_update", {"id": item_id, **_picked("unit_update", body)}, datasets.update_unit, item_id, body)
     return jsonify({"ok": True})
 
 
 @bp.delete("/units/<int:item_id>")
 @require_admin
 def delete_unit(item_id: int):
-    _edit(datasets.delete_unit, item_id)
+    _audited("unit_delete", {"id": item_id}, datasets.delete_unit, item_id)
     return jsonify({"ok": True})
 
 
@@ -195,7 +254,13 @@ def delete_unit(item_id: int):
 @require_admin
 def publish(dataset: str):
     """發布草稿。先寫資料庫(交易成功),再從資料庫重新載入快取。"""
-    version = _edit(datasets.publish, dataset, g.admin_email)
+
+    def _publish(cur):
+        version = datasets.publish(cur, dataset, g.admin_email)
+        audit.record(cur, g.admin_email, "publish", {"dataset": dataset, "version": version})
+        return version
+
+    version = _edit(_publish)
     try:
         cache.public.reload()
         cache_ok = True
@@ -208,6 +273,7 @@ def publish(dataset: str):
 @require_admin
 def reload_cache():
     cache.public.reload()
+    _edit(lambda cur: audit.record(cur, g.admin_email, "cache_reload"))
     return jsonify(cache.status())
 
 
@@ -224,7 +290,15 @@ def get_app_config():
 @bp.put("/app-config")
 @require_admin
 def put_app_config():
-    _edit(app_config.update, _body(), g.admin_email)
+    body = _body()
+
+    def _update(cur):
+        app_config.update(cur, body, g.admin_email)
+        changed = {k: body[k] for k in app_config.FIELDS if k in body}
+        if changed:
+            audit.record(cur, g.admin_email, "app_config_update", changed)
+
+    _edit(_update)
     try:
         cache.public.reload()
     except Exception:  # noqa: BLE001 - 已寫入資料庫;快取晚點補上
@@ -252,6 +326,8 @@ def list_formats():
 @require_admin
 def list_feedback():
     filters = {k: request.args.get(k, "").strip() for k in ("kind", "status", "app_version", "device_model")}
+    if textutil.contains(filters, textutil.UNSTORABLE):
+        return _error(400, "invalid", "篩選條件有無法處理的字元")
     try:
         page = max(int(request.args.get("page", "1")), 1)
     except ValueError:
@@ -288,8 +364,21 @@ def get_feedback(feedback_id):
 @require_admin
 def update_feedback(feedback_id):
     body = _body()
+    fid = str(feedback_id)
+
+    def _update(cur):
+        ok = feedback_db.update(cur, fid, body)
+        fields = sorted(k for k in ("status", "admin_note") if k in body)
+        if ok and fields:
+            # 處理備註是管理員寫的自由文字,紀錄只記「改了哪些欄位」與新的處理狀態。
+            detail = {"id": fid, "fields": fields}
+            if "status" in body:
+                detail["status"] = body["status"]
+            audit.record(cur, g.admin_email, "feedback_update", detail)
+        return ok
+
     try:
-        ok = _edit(feedback_db.update, str(feedback_id), body)
+        ok = _edit(_update)
     except ValueError as exc:
         return _error(400, "invalid", str(exc))
     return jsonify({"ok": True}) if ok else _error(404, "not_found", "找不到這則意見回饋")
@@ -298,7 +387,15 @@ def update_feedback(feedback_id):
 @bp.delete("/feedback/<uuid:feedback_id>")
 @require_admin
 def delete_feedback(feedback_id):
-    ok = _edit(feedback_db.delete, str(feedback_id))
+    fid = str(feedback_id)
+
+    def _delete(cur):
+        ok = feedback_db.delete(cur, fid)
+        if ok:
+            audit.record(cur, g.admin_email, "feedback_delete", {"id": fid})
+        return ok
+
+    ok = _edit(_delete)
     return jsonify({"ok": True}) if ok else _error(404, "not_found", "找不到這則意見回饋")
 
 
@@ -309,7 +406,14 @@ def delete_feedback_by_email():
     email = normalize_email(_body().get("email"))
     if email is None:
         return _error(400, "invalid", "Email 格式不對")
-    return jsonify({"deleted": _edit(feedback_db.delete_by_email, email)})
+
+    def _delete(cur):
+        deleted = feedback_db.delete_by_email(cur, email)
+        # 只記刪了幾則:留下被刪的 Email,就違背了刪除請求。
+        audit.record(cur, g.admin_email, "feedback_delete_by_email", {"deleted": deleted})
+        return deleted
+
+    return jsonify({"deleted": _edit(_delete)})
 
 
 # ── 管理員 ────────────────────────────────────────────────────
@@ -332,7 +436,11 @@ def add_admin():
         return _error(400, "invalid", "Email 格式不對")
     if not isinstance(note, str) or len(note) > 100:
         return _error(400, "invalid", "備註要是 100 字以內的文字")
-    _edit(admin.admins.add, email, note.strip(), g.admin_email)
+    def _add(cur):
+        admin.admins.add(cur, email, note.strip(), g.admin_email)
+        audit.record(cur, g.admin_email, "admin_add", {"email": email})
+
+    _edit(_add)
     admin.forget_all()
     return jsonify({"ok": True}), 201
 
@@ -341,7 +449,7 @@ def add_admin():
 @require_admin
 def remove_admin(email: str):
     email = normalize_email(email)
-    if email is None:
+    if email is None or textutil.UNSTORABLE.search(email):
         return _error(400, "invalid", "Email 格式不對")
     if email == config.get().first_admin_email:
         return _error(400, "invalid", "第一位管理員由環境變數設定，不能在這裡移除")
@@ -351,8 +459,21 @@ def remove_admin(email: str):
     def _remove(cur):
         removed = admin.admins.remove(cur, email)
         admin.sessions.delete_for_email(cur, email)
+        if removed:
+            audit.record(cur, g.admin_email, "admin_remove", {"email": email})
         return removed
 
     removed = _edit(_remove)
     admin.forget_all()
     return jsonify({"ok": True}) if removed else _error(404, "not_found", "這個 Email 不在名單裡")
+
+
+# ── 操作紀錄 ──────────────────────────────────────────────────
+
+@bp.get("/audit")
+@require_admin
+def list_audit():
+    with db.connection() as conn:
+        with conn.cursor() as cur:
+            items = audit.recent(cur)
+    return jsonify({"items": items, "retention_days": config.get().audit_retention_days})

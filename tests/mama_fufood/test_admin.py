@@ -142,6 +142,43 @@ def test_formats_are_written_from_code(client, admin_token):
     assert by_version[0]["status"] == "supported" and by_version[0]["min_app_version"] == "0.1.0"
 
 
+@pytest.mark.parametrize("method, path, body", [
+    ("post", "/api/admin/groups", {"name": "分\u0000組", "emoji": "🍚"}),
+    ("post", "/api/admin/foods", {"group_id": 1, "name": "米\u0000", "emoji": "🍚"}),
+    ("patch", "/api/admin/foods/2", {"name": "粥\u0000"}),
+    ("post", "/api/admin/units", {"name": "\u0000"}),
+    ("put", "/api/admin/app-config", {"force_reason": "原因\u0000"}),
+    ("post", "/api/admin/admins", {"email": "a\u0000b@example.com"}),
+    ("post", "/api/admin/admins", {"email": "c@example.com", "note": "家\u0000人"}),
+    ("post", "/api/admin/feedback/delete-by-email", {"email": "a\u0000b@example.com"}),
+])
+def test_admin_text_the_database_cannot_store_is_a_bad_request(client, admin_token, method, path, body):
+    """後台的文字欄位帶 NUL:回 400,不是 500。"""
+    resp = getattr(client, method)(path, headers=admin_headers(admin_token), json=body)
+    assert resp.status_code == 400, resp.get_json()
+
+
+def test_admin_lone_surrogates_note_path_and_filters_are_bad_requests(client, admin_token):
+    import json
+    import uuid
+    h = admin_headers(admin_token)
+    # 落單的代理字元要用標準的 json.dumps 才送得出去。
+    raw = json.dumps({"group_id": 1, "name": "米\ud800", "emoji": "🍚"}).encode("ascii")
+    assert client.post("/api/admin/foods", headers=h, data=raw, content_type="application/json").status_code == 400
+    # 意見回饋的處理備註。
+    fid = str(uuid.uuid4())
+    assert client.post("/api/v1/feedback", headers=bearer(), json={
+        "id": fid, "kind": "suggestion", "description": "好用", "device_time": "2026-11-21T10:00:00+08:00",
+        "install_id": str(uuid.uuid4()), "app_version": "2.0.1", "build_number": "2001",
+        "device_model": "SM-G991B", "os_version": "Android 14 (API 34)", "snapshot": {}}).status_code == 201
+    assert client.patch(f"/api/admin/feedback/{fid}", headers=h, json={"admin_note": "已\u0000回覆"}).status_code == 400
+    # 網址裡的 Email 與意見回饋的篩選條件。
+    assert client.delete("/api/admin/admins/a%00b@example.com", headers=h).status_code == 400
+    assert client.get("/api/admin/feedback?device_model=SM%00", headers=h).status_code == 400
+    # 正常的值照常可以用。
+    assert client.get("/api/admin/feedback?device_model=SM-G991B", headers=h).get_json()["total"] == 1
+
+
 def test_logout(client, admin_token):
     h = admin_headers(admin_token)
     assert client.post("/api/admin/logout", headers=h).status_code == 200

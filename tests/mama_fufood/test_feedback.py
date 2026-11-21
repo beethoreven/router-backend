@@ -62,6 +62,63 @@ def test_needs_login(client, db):
     assert client.post("/api/v1/feedback", json=_feedback()).status_code == 401
 
 
+def test_login_is_checked_before_the_body_is_read(client, db, monkeypatch):
+    """沒有有效憑證的請求不讀內容(最多約 1.6 MB):回 401,不是「內容太大」。"""
+    from apps.mama_fufood import routes as public
+
+    def must_not_read(*_a, **_k):
+        raise AssertionError("驗證登入憑證之前不應該讀內容")
+
+    monkeypatch.setattr(public.payload, "read_json", must_not_read)
+    resp = client.post("/api/v1/feedback", json=_feedback(), headers={"Authorization": "Bearer not-a-token"})
+    assert resp.status_code == 401
+    assert resp.get_json()["code"] == "invalid_token"
+
+
+def test_oversized_body_without_login_is_refused_as_unauthorized(client, db):
+    too_big = b"x" * 2_000_000
+    resp = client.post("/api/v1/feedback", data=too_big, content_type="application/json",
+                       headers={"Authorization": "Bearer not-a-token"})
+    assert resp.status_code == 401
+    # 登入了才看內容:太大照樣是 413。
+    resp = client.post("/api/v1/feedback", data=too_big, content_type="application/json", headers=bearer())
+    assert resp.status_code == 413
+
+
+def _raw(body: dict) -> bytes:
+    """用標準的 json.dumps(非 ASCII 寫成 \\uXXXX):落單的代理字元才送得出去。"""
+    return json.dumps(body).encode("ascii")
+
+
+@pytest.mark.parametrize("change", [
+    {"description": "月曆\u0000放大"},
+    {"device_model": "SM-G991B\u0000"},
+    {"snapshot": {"babies": 1, "note": "a\u0000b"}},
+    {"snapshot": {"a\u0000b": 1}},
+    {"snapshot": {"list": [{"deep": ["x", "y\u0000"]}]}},
+    {"description": "月曆\ud800放大"},
+    {"snapshot": {"text": "\udfff"}},
+])
+def test_text_the_database_cannot_store_is_a_bad_request(client, db, change):
+    """NUL 與落單的代理字元存不進 Postgres:回 400,不是 500,也不留下任何東西。"""
+    resp = client.post("/api/v1/feedback", data=_raw(_feedback(**change)), content_type="application/json",
+                       headers=bearer())
+    assert resp.status_code == 400, resp.get_json()
+    assert resp.get_json()["code"] == "bad_request"
+    import psycopg
+    with psycopg.connect(db) as conn:
+        # 在碰資料庫之前就擋下:空的測試資料庫連表都還沒建。
+        if conn.execute("SELECT to_regclass('public.feedback')").fetchone()[0] is not None:
+            assert conn.execute("SELECT count(*) FROM feedback").fetchone()[0] == 0
+
+
+def test_ordinary_text_with_emoji_and_symbols_is_still_accepted(client, db):
+    body = _feedback(description="寶寶吃了🥕胡蘿蔔 😊 —「好吃」\t第二行\n第三行",
+                     snapshot={"babies": 1, "emoji": "👶🏻", "quote": "\"'<>&"})
+    resp = client.post("/api/v1/feedback", data=_raw(body), content_type="application/json", headers=bearer())
+    assert resp.status_code == 201, resp.get_json()
+
+
 def test_validation(client, db):
     assert client.post("/api/v1/feedback", json=_feedback(description=" "), headers=bearer()).status_code == 400
     assert client.post("/api/v1/feedback", json=_feedback(description="字" * 1001), headers=bearer()).status_code == 400

@@ -74,6 +74,25 @@ def test_invalid_old_file_is_rejected_before_counting(client, monkeypatch):
     assert public.convert_quota.used("user-1") == 0
 
 
+def test_lone_surrogates_are_rejected_before_counting(client):
+    """落單的代理字元(JSON 的 "\\ud800" 寫法)轉不成 UTF-8,回應寫不出去:先擋下,不扣次數,也不是 500。"""
+    old = load_sample(0)
+    old["babies"][0]["name"] = "小\ud800寶"
+    old["babies"][0]["records"][0]["note"] = "備\udfff註"
+    body = gzip.compress(json.dumps(old).encode("ascii"))  # 標準的 json.dumps 才送得出落單的代理字元
+    resp = client.post("/api/v1/convert", data=body, headers={
+        **bearer(), "Content-Type": "application/json", "Content-Encoding": "gzip", "Accept-Encoding": "gzip"})
+    assert resp.status_code == 422, resp.get_json()
+    assert resp.get_json()["code"] == "invalid_file"
+    assert public.convert_quota.used("user-1") == 0
+
+
+def test_real_old_file_still_converts(client):
+    resp = _post(client, load_sample(0))
+    assert resp.status_code == 200
+    assert json.loads(gzip.decompress(resp.data))["format_version"] == CUR
+
+
 def test_five_per_day(client, monkeypatch):
     _fake_v2(monkeypatch)
     for _ in range(5):
