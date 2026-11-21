@@ -55,7 +55,9 @@ def decode_json(raw: bytes, gzipped: bool, max_decompressed: int | None = None):
         raw = gunzip_limited(raw, max_decompressed)
     try:
         return json.loads(raw.decode("utf-8"))
-    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+    # RecursionError:巢狀太深的 JSON(例如幾十萬層的 [[[…]]])會讓解析器用完堆疊。
+    # 不接住的話每個讀 JSON 的端點都會回 500,而且不需要任何憑證就能觸發。
+    except (UnicodeDecodeError, json.JSONDecodeError, RecursionError) as exc:
         raise PayloadError("內容不是正確的 JSON") from exc
 
 

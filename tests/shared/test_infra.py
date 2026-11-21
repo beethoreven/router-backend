@@ -91,6 +91,16 @@ def test_json_body_limits():
     assert client.post("/echo", data=b"{nope", content_type="application/json").status_code == 400
 
 
+
+def test_deeply_nested_json_is_a_400_not_a_500():
+    # Deep enough to exhaust the parser's stack on any thread (800,000 levels already does on the
+    # main thread with Python 3.15; request threads have smaller stacks).
+    depth = 3_000_000
+    with pytest.raises(payload.PayloadError) as info:
+        payload.decode_json(b"[" * depth + b"]" * depth, gzipped=False)
+    assert info.value.status == 400
+
+
 # ── quota ──
 
 def test_daily_counter_resets_at_taipei_midnight(monkeypatch):
