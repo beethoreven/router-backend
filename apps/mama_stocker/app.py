@@ -12,6 +12,7 @@
 from __future__ import annotations
 
 import logging
+import re
 import threading
 import time
 
@@ -24,6 +25,7 @@ from . import config
 from .db import connection as db_connection
 from .line_utils import client as line_client
 from .line_utils import handler as line_handler
+from .line_utils import ids as line_ids
 from .line_utils import images as line_images
 from .line_utils import signature as line_signature
 from .stock_utils import clock, sources
@@ -202,16 +204,16 @@ def line_webhook():
             log.warning("LINE 事件處理失敗：%s", type(exc).__name__, exc_info=True)
 
     # 群組名單排在**所有回覆之後**。記一個人要查一次 LINE（最多 3 秒）、連一次
-    # 資料庫（連不上時最多等 9 秒）；排在前面的話，資料庫一掛，同一包裡後面
-    # 那則真的在問 bot 的訊息就會被拖過 replyToken 與 webhook 的期限。
+    # 資料庫（連不上時最多等 9 秒），刪人也要連資料庫；排在前面的話，資料庫一掛，
+    # 同一包裡後面那則真的在問 bot 的訊息就會被拖過 replyToken 與 webhook 的期限。
     #
-    # ★ 記失敗了不設冷卻，下一則訊息會再試：「剛加入」的事件 LINE 只送一次，
+    # ★ 失敗了不設冷卻，下一則訊息會再試：「剛加入」的事件 LINE 只送一次，
     #   冷卻期間丟掉的人就永遠不會出現在名單上。反正已經不擋回覆了。
     for event in events:
         try:
-            line_handler.note_group_member(event)
-        except Exception as exc:  # noqa: BLE001 - 記不到名單不該讓 webhook 回 5xx
-            log.warning("記錄群組成員失敗：%s", type(exc).__name__)
+            line_handler.track_group_members(event)
+        except Exception as exc:  # noqa: BLE001 - 更新不了名單不該讓 webhook 回 5xx
+            log.warning("更新群組名單失敗：%s", type(exc).__name__)
     return jsonify({"ok": True})
 
 
@@ -232,7 +234,8 @@ def _handle_line_event(event: dict, *, dry_run: bool = False) -> list:
     reply_token = event.get("replyToken")
     if not reply_token:
         return sent
-    sender = (event.get("source") or {}).get("userId")
+    # 形狀不對的 userId 當作沒有（見 line_utils/ids.py）：沒有 sender 就是沒有權限，「我的ID」也不回。
+    sender = line_ids.user_id((event.get("source") or {}).get("userId"))
 
     # 拿自己的 userId。開通要先有這個 id，而它只有在對方跟 bot 有互動之後才
     # 拿得到。任何人都能問——回的是「你自己的 id」，不是誰的秘密。
@@ -277,7 +280,7 @@ def line_image(token: str):
 
     來抓的是看訊息的那台裝置上的 LINE App，不會帶任何登入資訊。網址上的
     簽名證明這是 bot 自己回出去的（為什麼要擋，見 line_utils/images.py）。
-    驗不過一律 404。
+    驗不過、或網址發出太久（images.MAX_AGE），一律 404。
     """
     if not line_client.enabled():
         return jsonify({"error": "LINE 未設定", "code": "line_not_configured"}), 503
@@ -287,10 +290,37 @@ def line_image(token: str):
     if png is None:
         return jsonify({"error": "網址無效", "code": "bad_image_url"}), 404
     # LINE 什麼時候、由誰來抓圖，官方文件沒寫，只能靠這一行 log 量。圖出不來的時候，這一行是唯一能分辨「沒來抓」與「畫太久」的線索。
-    log.info("[line-img] %s｜%.0f ms｜%d KB｜UA: %s", spec, (time.perf_counter() - started) * 1000,
-             len(png) // 1024, request.headers.get("User-Agent", "")[:120] or "(無)")
+    log.info("[line-img] %s｜%.0f ms｜%d KB｜來抓的：%s", spec, (time.perf_counter() - started) * 1000,
+             len(png) // 1024, _fetcher(request.headers.get("User-Agent", "")))
     resp = current_app.response_class(png, mimetype="image/png")
     # 網址含發出時間，每一次查詢都是新的網址，所以快取再久也不會讓明天的人
     # 看到今天的圖。留得愈久，LINE 愈不需要回來抓。
     resp.headers["Cache-Control"] = "public, max-age=31536000"
     return resp
+
+
+_LINE_APP = re.compile(r"\bline/\d", re.IGNORECASE)
+
+
+def _fetcher(user_agent: str) -> str:
+    """來抓圖的 User-Agent → 幾個固定的類別之一。
+
+    ★ 只記類別，不記原文：User-Agent 是來抓的人愛寫什麼就寫什麼的字串，原樣寫進 log，等於讓
+      任何拿到圖片網址的人都能在我們的 log 裡寫一段字；原文也帶著裝置與系統版本這類認得出人的
+      資訊。這一行要回答的只是「有沒有來抓、是不是 LINE」，類別就夠了。
+
+        LINE 電腦版  DESKTOP: 開頭（看過的 Mac 版是 DESKTOP:MAC:<系統版本>(<App 版本>)）
+        LINE 手機版  帶 Line/<版本號> 的（手機版實際的寫法還沒在 log 裡看過）
+        瀏覽器       其他 Mozilla/ 開頭的
+        其他         以上都不是
+        （無）       沒帶 User-Agent
+    """
+    if not user_agent:
+        return "（無）"
+    if user_agent.startswith("DESKTOP:"):
+        return "LINE 電腦版"
+    if _LINE_APP.search(user_agent):
+        return "LINE 手機版"
+    if user_agent.startswith("Mozilla/"):
+        return "瀏覽器"
+    return "其他"

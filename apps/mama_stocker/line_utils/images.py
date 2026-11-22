@@ -82,13 +82,27 @@ def sign(spec: str, secret: str, *, issued: int | None = None) -> str:
     return f"{body}.{_mac(secret, body)}"
 
 
-def verify(token: str, secret: str) -> str | None:
-    """驗簽。對的話回 spec，不對回 None。"""
+# 網址發出之後多久內畫得出圖，超過就當作無效。
+#
+# 簽名只證明網址是 bot 發的。沒有期限的話，一個網址就是一支永久的「替拿到它的人畫最新走勢」
+# 的入口：render 畫的是來抓那一刻的圖，不是發出那一刻的。期限也不能太短：來抓圖的是看訊息
+# 的那台裝置上的 LINE，裝置上沒有快取時（換手機、清快取、回頭翻很久以前的訊息）會再來抓，
+# 過期的就顯示不出來。三十天：比一般回頭翻聊天紀錄的時間長，又不是永久。
+MAX_AGE = 30 * 86400
+# 發出時間比現在晚多少以內還算有效：發出與來抓可能是不同次部署的主機，時鐘會差一點。
+_CLOCK_SKEW = 300
+
+
+def verify(token: str, secret: str, *, now: float | None = None) -> str | None:
+    """驗簽與期限。都過了回 spec，不然回 None。"""
     m = _TOKEN.fullmatch(token)
     if not m:
         return None
     spec, issued, sig = m.groups()
     if not hmac.compare_digest(sig, _mac(secret, f"{spec}.{issued}")):
+        return None
+    age = (time.time() if now is None else now) - int(issued)
+    if not -_CLOCK_SKEW <= age <= MAX_AGE:
         return None
     return spec
 

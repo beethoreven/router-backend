@@ -25,13 +25,18 @@ def mama_stocker_config():
     """每個測試都從乾淨的設定與記憶體狀態開始（不需要 router 的測試也讀得到 config.get()）。"""
     from apps.mama_stocker import config
     from apps.mama_stocker.db import connection, speakers, users
+    from apps.mama_stocker.stock_utils import sources
 
     config.set_current(config.StockerConfig(
         line_channel_secret="test-secret", line_channel_access_token="test-token",
         database_url="postgresql://test.invalid/test", start_warm_up=False))
     users._allowed, users._expires_at, users._loaded_at = None, 0.0, 0.0
     speakers._recorded.clear()
+    speakers._unfollowed.clear()
     connection.database.reset_for_tests()
+    # 即時價也有快取了（sources._QUOTE_TTL）：前一個測試抓到的報價不能帶到下一個。
+    for table in (sources._cache, sources._failed, sources._last, sources._locks):
+        table.clear()
     yield
     config.set_current(config.StockerConfig())
 

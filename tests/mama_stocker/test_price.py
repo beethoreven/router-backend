@@ -148,9 +148,9 @@ def test_etf_rate_needs_current_price_and_says_not_found(at, monkeypatch):
         Payout(date(2026, 4, 21), date(2026, 5, 11), 1.0)])
     with pytest.raises(LookupError):
         _rate("0056 利率")
-    monkeypatch.setattr(handler.users, "is_allowed", lambda sender: True)
+    monkeypatch.setattr(handler.users, "access", lambda sender: handler.users.ALLOWED)
     reply = handler.handle_command("0056 利率", sender="Utest", private=True)
-    assert reply.startswith("現在查不到資料")
+    assert reply == commands.UNAVAILABLE
 
 
 def test_yield_without_current_raises():
@@ -291,6 +291,13 @@ def test_yahoo_date_is_taipei_not_utc(monkeypatch):
 def test_yahoo_missing_symbol_is_none(monkeypatch):
     _yahoo_returns(monkeypatch, [])
     assert sources.yahoo_quote("tse", "9999") is None
+
+
+def test_yahoo_is_asked_once_per_quote_ttl(monkeypatch):
+    asked = []
+    _yahoo_returns(monkeypatch, [GOOD], asked)
+    assert sources.yahoo_quote("otc", "8069") == sources.yahoo_quote("otc", "8069")
+    assert len(asked) == 1
 
 
 @pytest.mark.parametrize("data", [

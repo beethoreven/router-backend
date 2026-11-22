@@ -26,7 +26,7 @@
     配息公告            沒有版本日期可看，公司又常在收盤後到傍晚才公告，所以
                         平日早上、晚上各更新一次（_ANNOUNCE_AT）。
     其他（每月均價等）  最多放 _TTL。
-    盤中即時價          不快取，每次都是當下的。
+    盤中即時價          放 _QUOTE_TTL（十幾秒），Yahoo 的備用報價也一樣（理由見那裡）。
 
 ★ 過期就當場重抓，抓不到就明確失敗，**不回舊資料**（理由見 _cached）。
 
@@ -67,6 +67,14 @@ _TTL = 3600
 
 # 配息公告平日在這兩個時刻之後要重抓：開盤前一次，收盤後公司公告完的晚上一次。
 _ANNOUNCE_AT = (dt_time(8, 30), dt_time(20, 0))
+
+# 即時價（官方即時行情、Yahoo 的備用報價）放幾秒。
+#
+# 行情網站自己就會把同一個查詢的結果放一分鐘左右（見 realtime），這裡再放十幾秒，回出去的
+# 價格最多再多落後這麼久。換來的是：同一支股票被好幾個人同時問（群組裡常見）只打一次；剛
+# 失敗過的，_RETRY_AFTER 之內也不會每一則訊息都再打一次。打太兇，證交所會擋這台主機的 IP，
+# 那時候整個 bot 都問不到即時價。
+_QUOTE_TTL = 15
 
 # 抓一包資料最多等幾秒（整包，不是每次讀取）。
 _DEADLINE = 8
@@ -328,7 +336,7 @@ def tpex_yields() -> dict[str, float]:
 # ── 盤中即時 ─────────────────────────────────────────────────────
 
 def realtime(market: str, code: str) -> dict | None:
-    """證交所行情網站自己用的那一支。market 是 'tse' 或 'otc'。不快取。
+    """證交所行情網站自己用的那一支。market 是 'tse' 或 'otc'。放 _QUOTE_TTL 秒。
 
     回傳 {date, last, prev_close}：
         date        這筆資料是哪個交易日的（休市日會是上一個交易日）
@@ -341,36 +349,40 @@ def realtime(market: str, code: str) -> dict | None:
       就退回昨收，結果開盤第一天就把昨天的收盤價標成「盤中即時價」回出去。
 
     ★ 同一個查詢字串，行情網站會回快取住的結果，實測可以到一分鐘左右沒變。
-      所以這裡的「即時」是一分鐘內，不是逐筆。
+      所以這裡的「即時」是一分鐘內，不是逐筆；這裡再放 _QUOTE_TTL 秒。
     """
-    def load():
+    def fetch():
         return _get_json(
             "https://mis.twse.com.tw/stock/api/getStockInfo.jsp",
             ex_ch=f"{market}_{code}.tw", json=1, delay=0,
         )
-    # 不走 _cached，所以期限自己套。從 Render 連過去偶爾會慢，失敗就再試一次——
-    # 這一支問不到，使用者就只能看到「查不到」。
-    try:
-        data = _with_deadline(load, 4)
-    except Exception as exc:  # noqa: BLE001
-        print(f"[source] 即時行情 {code} 第一次失敗，重試：{type(exc).__name__}: {exc}"[:200],
-              flush=True)
-        data = _with_deadline(load, 4)
-    rows = data.get("msgArray") or []
-    if not rows:
-        return None
-    r = rows[0]
-    d = r.get("d") or ""
-    return {
-        "date": date(int(d[:4]), int(d[4:6]), int(d[6:8])) if len(d) == 8 else None,
-        "last": number(r.get("z")) or number((r.get("trade") or {}).get("z")),
-        "prev_close": number(r.get("y")),
-    }
+
+    def load():
+        # 從 Render 連過去偶爾會慢，失敗就再試一次，每次各有自己的期限——這一支問不到，
+        # 就只能退到收盤表或 Yahoo（見 market.price）。
+        try:
+            data = _with_deadline(fetch, 4)
+        except Exception as exc:  # noqa: BLE001
+            print(f"[source] 即時行情 {code} 第一次失敗，重試：{type(exc).__name__}: {exc}"[:200],
+                  flush=True)
+            data = _with_deadline(fetch, 4)
+        rows = data.get("msgArray") or []
+        if not rows:
+            return None
+        r = rows[0]
+        d = r.get("d") or ""
+        return {
+            "date": date(int(d[:4]), int(d[4:6]), int(d[6:8])) if len(d) == 8 else None,
+            "last": number(r.get("z")) or number((r.get("trade") or {}).get("z")),
+            "prev_close": number(r.get("y")),
+        }
+    # 總期限要放得下兩次各 4 秒。
+    return _cached(("realtime", market, code), _QUOTE_TTL, load, deadline=9)
 
 
 
 def yahoo_quote(market: str, code: str) -> dict | None:
-    """Yahoo 股市網頁自己用的那一支，回傳格式跟 realtime 一樣。不快取。
+    """Yahoo 股市網頁自己用的那一支，回傳格式跟 realtime 一樣。放 _QUOTE_TTL 秒。
 
     非官方來源，只在官方的即時行情和收盤表都用不了的時候才問（見 market.price），
     用到它的回覆要標出來。格式跟預期不一樣就當作失敗（ValueError），不猜。
@@ -384,22 +396,22 @@ def yahoo_quote(market: str, code: str) -> dict | None:
             f"https://tw.stock.yahoo.com/_td-stock/api/resource/StockServices.stockList;symbols={symbol}",
             headers=_UA, timeout=_TIMEOUT)
         r.raise_for_status()
-        return r.json()
-    rows = _with_deadline(load, 4)
-    if not isinstance(rows, list):
-        raise ValueError(f"Yahoo 回的不是 list：{type(rows).__name__}")
-    row = next((r for r in rows if isinstance(r, dict) and r.get("symbol") == symbol), None)
-    if row is None:
-        return None
-    try:
-        last = float(row["price"]["raw"])
-        prev = float(row["regularMarketPreviousClose"]["raw"])
-        at = datetime.fromisoformat(row["regularMarketTime"].replace("Z", "+00:00"))
-    except (KeyError, TypeError, ValueError) as exc:
-        raise ValueError(f"Yahoo {symbol} 的格式不對：{type(exc).__name__}: {exc}"[:200]) from None
-    if last <= 0 or prev <= 0 or at.tzinfo is None:
-        raise ValueError(f"Yahoo {symbol} 的數字不對：price={last} prev={prev}")
-    return {"date": at.astimezone(clock.TAIPEI).date(), "last": last, "prev_close": prev}
+        rows = r.json()
+        if not isinstance(rows, list):
+            raise ValueError(f"Yahoo 回的不是 list：{type(rows).__name__}")
+        row = next((r for r in rows if isinstance(r, dict) and r.get("symbol") == symbol), None)
+        if row is None:
+            return None
+        try:
+            last = float(row["price"]["raw"])
+            prev = float(row["regularMarketPreviousClose"]["raw"])
+            at = datetime.fromisoformat(row["regularMarketTime"].replace("Z", "+00:00"))
+        except (KeyError, TypeError, ValueError) as exc:
+            raise ValueError(f"Yahoo {symbol} 的格式不對：{type(exc).__name__}: {exc}"[:200]) from None
+        if last <= 0 or prev <= 0 or at.tzinfo is None:
+            raise ValueError(f"Yahoo {symbol} 的數字不對：price={last} prev={prev}")
+        return {"date": at.astimezone(clock.TAIPEI).date(), "last": last, "prev_close": prev}
+    return _cached(("yahoo", market, code), _QUOTE_TTL, load, deadline=4)
 
 # ── 配息：個股（上市、上櫃同一支）────────────────────────────────
 

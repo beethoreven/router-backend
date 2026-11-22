@@ -14,6 +14,7 @@ from datetime import date, timedelta
 from ..db import speakers, users
 from . import client
 from . import commands
+from . import ids
 from .images import ImageReply
 from ..stock_utils import market
 
@@ -62,20 +63,41 @@ def is_my_id(event: dict, text: str) -> bool:
     return text.replace(" ", "").upper() in ("我的ID", "MYID")
 
 
-def note_group_member(event: dict) -> None:
-    """群組裡有人說話（不必 tag 我）或有人加入：還沒開通的人，把 userId 記下來。
+def track_group_members(event: dict) -> None:
+    """群組名單（見 _group_list）跟著群組的進出更新：還沒開通的人記下來，離開或封鎖的刪掉。
 
-    之後已開通的人私訊「群組名單」就查得到，見 _group_list。
-    每個人只在這個行程第一次看到時記一次——那一次會多打一支 LINE API 查名字、
-    連一次資料庫；之後他說的每一句都是直接略過。
+        message       群組裡有人說話（不必 tag 我），發話者在 source.userId   → 記
+                      （只有手機版發的訊息會附 userId）
+        memberJoined  有人加入，新成員在 joined.members[]                     → 記
+        memberLeft    有人離開，離開的人在 left.members[]                     → 刪（只刪記在這個群組的）
+        leave         bot 被移出群組，source 裡只有 groupId                   → 刪掉這個群組的所有人
+        unfollow      有人封鎖 bot（一對一的事件，source 是那個人）           → 刪
 
-        message       發話者在 source.userId（只有手機版發的訊息會附）
-        memberJoined  新成員在 joined.members[]，source 裡只有 groupId
+    記：同一個人一天最多記一次——那一次會多打一支 LINE API 查名字、連一次資料庫；同一天之內
+    他說的其他每一句都直接略過（見 db/speakers.py 的 _RECORD_EVERY）。
+
+    ID 一律先過 ids 的形狀檢查，形狀不對的當作沒有：它們會拿去組 LINE API 的網址、寫進資料庫。
     """
+    kind = event.get("type")
     source = event.get("source") or {}
+    if kind == "unfollow":
+        uid = ids.user_id(source.get("userId"))
+        if uid:
+            speakers.forget_blocker(uid)
+        return
     if source.get("type") != "group":
         return
-    kind = event.get("type")
+    group_id = ids.group_id(source.get("groupId"))
+    if kind == "leave":
+        if group_id:
+            speakers.forget_group(group_id)
+        return
+    if kind == "memberLeft":
+        if group_id:
+            members = (event.get("left") or {}).get("members") or []
+            gone = {ids.user_id(m.get("userId")) for m in members if m.get("type") == "user"}
+            speakers.forget(sorted(gone - {None}), group_id=group_id)
+        return
     if kind == "message":
         found = [(source.get("userId"), "message")]
     elif kind == "memberJoined":
@@ -83,8 +105,8 @@ def note_group_member(event: dict) -> None:
         found = [(m.get("userId"), "joined") for m in members if m.get("type") == "user"]
     else:
         return
-    group_id = source.get("groupId")
-    for uid, via in found:
+    for raw_uid, via in found:
+        uid = ids.user_id(raw_uid)
         if not uid or speakers.already_recorded(uid) or users.is_allowed(uid):
             continue
         name = client.group_member_name(group_id, uid) if group_id else None
@@ -117,13 +139,21 @@ def handle_command(text: str, *, sender: str | None, private: bool) -> str | Ima
       「格式錯」還是「bot 死了」。資料來源掛掉時也一樣要回。
     """
     # ★ 權限排在**所有判斷之前**。這個 bot 只給綁定過的人用：沒開通的人不管
-    #   傳什麼都回同一句，連格式列表都不給。
-    if not users.is_allowed(sender):
+    #   傳什麼都回同一句，連格式列表都不給。名單讀不到（資料庫連不上）時不知道
+    #   對方有沒有開通，回另一句：不能讓已開通的人以為自己被停權。
+    access = users.access(sender)
+    if access == users.UNKNOWN:
+        return commands.ACCESS_UNKNOWN
+    if access != users.ALLOWED:
         return commands.NO_PERMISSION
 
     # 只在私訊回：群組裡回的話，別人的 userId 整個群組都看得到。
     if private and text.replace(" ", "") == commands.GROUP_LIST:
-        return _group_list()
+        try:
+            return _group_list()
+        except Exception as exc:  # noqa: BLE001 - 見上面：一定要回一句（名單在資料庫裡）
+            log.warning("查詢失敗（群組名單）：%s", type(exc).__name__, exc_info=True)
+            return commands.UNAVAILABLE
 
     kind, payload = commands.parse(text)
     if kind == commands.UNKNOWN:
@@ -133,7 +163,7 @@ def handle_command(text: str, *, sender: str | None, private: bool) -> str | Ima
     except Exception as exc:  # noqa: BLE001 - 見上面：一定要回一句
         # ★ 不記使用者打的字（router-backend 的規則），只記查的是哪一種與例外。
         log.warning("查詢失敗（%s）：%s", kind, type(exc).__name__, exc_info=True)
-        return "現在查不到資料，可能是證交所或櫃買中心的網站暫時連不上，請稍後再試。"
+        return commands.UNAVAILABLE
 
 
 def _answer(kind: str, payload: dict) -> str | ImageReply:

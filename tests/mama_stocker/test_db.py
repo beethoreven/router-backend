@@ -58,6 +58,48 @@ def test_no_database_url_means_nobody_is_allowed(monkeypatch):
     assert not users.is_allowed("Uamy")
 
 
+def test_stale_list_is_dropped_after_max_stale(monkeypatch, caplog):
+    """資料庫一直連不上時，舊名單只沿用一小時：沿用期間剛停用的人仍然能用。"""
+    now = [1000.0]
+    monkeypatch.setattr(users.time, "monotonic", lambda: now[0])
+    _ttl(60)
+    monkeypatch.setattr(users, "_load", lambda: frozenset({"Uamy"}))
+    assert users.is_allowed("Uamy")
+
+    def down():
+        raise ConnectionError("連不上")
+    monkeypatch.setattr(users, "_load", down)
+    now[0] += users._MAX_STALE - 60      # 一小時內：沿用
+    assert users.is_allowed("Uamy")
+    now[0] += 120                        # 超過一小時：丟掉，所有人都擋
+    with caplog.at_level(logging.WARNING, logger=users.log.name):
+        assert not users.is_allowed("Uamy")
+    assert "丟掉" in caplog.text
+    assert users.access("Uamy") == users.UNKNOWN   # 擋的理由是「名單讀不到」，不是「沒開通」
+    now[0] += 61                         # 資料庫回來了
+    monkeypatch.setattr(users, "_load", lambda: frozenset({"Uamy"}))
+    assert users.is_allowed("Uamy")
+
+
+def test_access_tells_an_unreadable_list_apart_from_not_allowed(monkeypatch):
+    _ttl(0)
+
+    def down():
+        raise ConnectionError("連不上")
+    monkeypatch.setattr(users, "_load", down)
+    assert users.access("Uamy") == users.UNKNOWN      # 開機後一直連不上：沒有名單
+    assert users.access(None) == users.DENIED         # 認不出是誰，不是「暫時」
+    monkeypatch.setattr(users, "_load", lambda: frozenset({"Uamy"}))
+    assert users.access("Uamy") == users.ALLOWED
+    assert users.access("Ustranger") == users.DENIED  # 名單讀得到、上面沒有：真的沒開通
+
+
+def test_no_database_url_is_denied_not_unknown():
+    """沒設資料庫是設定錯誤，稍後再試也不會好，所以照舊回「沒有權限」。"""
+    config.set_current(replace(config.get(), database_url=""))
+    assert users.access("Uamy") == users.DENIED
+
+
 # ── 群組名單的「剛加入」────────────────────────────────────────
 
 def test_just_joined_label_expires_after_a_week(at, monkeypatch):

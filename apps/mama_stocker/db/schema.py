@@ -62,8 +62,8 @@ def _ensure_group_speakers(cur) -> None:
         說話    只有手機版（iOS／Android）發的訊息會附 userId，電腦版發的不附
         加入    只有 bot 進群**之後**才加入的人；原本就在的人沒有這個事件
 
-    一個人一列。via 記的是第一次看到他是哪一種。已經開通的人不記，
-    見 db/speakers.py。
+    一個人一列。via 記的是第一次看到他是哪一種。已經開通的人不記；
+    留多久（開通、90 天沒出現、離開群組、封鎖 bot 都會刪）見 db/speakers.py。
     """
     cur.execute(
         """

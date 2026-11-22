@@ -64,3 +64,26 @@ def test_next_day_counts_as_newer(at, fake_chart):
     at(2026, 11, 11, 0, 5)
     images.render("t2330")
     assert [k[1:] for k in images._drawn] == [(market.now().date(), 0)]
+
+
+# ── 網址的期限（images.verify）─────────────────────────────────────
+
+ISSUED = 1_800_000_000
+
+
+def test_url_is_valid_for_max_age_then_expires():
+    token = images.sign("t2330", "s", issued=ISSUED)
+    assert images.verify(token, "s", now=ISSUED) == "t2330"
+    assert images.verify(token, "s", now=ISSUED + images.MAX_AGE) == "t2330"
+    assert images.verify(token, "s", now=ISSUED + images.MAX_AGE + 1) is None
+
+
+def test_url_issued_in_the_future_is_refused_beyond_clock_skew():
+    token = images.sign("t2330", "s", issued=ISSUED)
+    assert images.verify(token, "s", now=ISSUED - images._CLOCK_SKEW) == "t2330"
+    assert images.verify(token, "s", now=ISSUED - images._CLOCK_SKEW - 1) is None
+
+
+def test_expiry_does_not_replace_the_signature_check():
+    token = images.sign("t2330", "someone-else", issued=ISSUED)
+    assert images.verify(token, "s", now=ISSUED) is None

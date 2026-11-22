@@ -16,6 +16,7 @@ import logging
 import requests
 
 from .. import config
+from . import ids
 
 log = logging.getLogger(__name__)
 
@@ -70,8 +71,10 @@ def group_member_name(group_id: str, user_id: str) -> str | None:
     """群組成員的顯示名稱；查不到就 None。
 
     ★ getProfile 只對「已加 bot 好友」的人有效，群組裡的人要用這一支。
+    ★ 兩個 ID 會直接放進網址的路徑。呼叫端已經檢查過形狀，這裡再擋一次：路徑裡出現別的
+      字元（例如 ../）就會變成打另一支 API，而且帶著 bot 的權杖。
     """
-    if not enabled():
+    if not enabled() or ids.group_id(group_id) is None or ids.user_id(user_id) is None:
         return None
     try:
         r = requests.get(

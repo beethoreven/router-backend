@@ -52,6 +52,41 @@ def test_new_year_in_taipei_while_server_is_still_in_last_year(at, monkeypatch):
         sources.mops_dividends("tse", 2026)
 
 
+def _mis(z="2400.0"):
+    return {"msgArray": [{"d": "20261112", "z": z, "y": "2395.0"}]}
+
+
+def test_realtime_is_fetched_once_per_quote_ttl(monkeypatch):
+    """同一支股票被好幾個人同時問，只打一次證交所；過了 _QUOTE_TTL 才再打。"""
+    asked = []
+    monkeypatch.setattr(sources, "_get_json", lambda url, **p: asked.append(p["ex_ch"]) or _mis())
+    now = [1_800_000_000.0]
+    monkeypatch.setattr(sources.time, "time", lambda: now[0])
+    first = sources.realtime("tse", "2330")
+    assert first["last"] == 2400.0
+    assert sources.realtime("tse", "2330") == first
+    sources.realtime("tse", "2317")          # 別支股票各算各的
+    assert asked == ["tse_2330.tw", "tse_2317.tw"]
+    now[0] += sources._QUOTE_TTL
+    sources.realtime("tse", "2330")
+    assert asked == ["tse_2330.tw", "tse_2317.tw", "tse_2330.tw"]
+
+
+def test_realtime_failure_is_not_retried_within_retry_after(monkeypatch):
+    """證交所不回的時候，不要每一則訊息都再打一次（打太兇會被擋 IP）。"""
+    tries = []
+
+    def down(url, **params):
+        tries.append(1)
+        raise ConnectionError("Remote end closed connection without response")
+    monkeypatch.setattr(sources, "_get_json", down)
+    for _ in range(3):
+        with pytest.raises(ConnectionError):
+            sources.realtime("tse", "2330")
+    # 第一次問：打一次、重試一次。之後 _RETRY_AFTER 之內直接回失敗。
+    assert len(tries) == 2
+
+
 def test_warm_up_uses_taipei_year(at, monkeypatch):
     at(2027, 1, 1, 3, 0)
     asked = []
