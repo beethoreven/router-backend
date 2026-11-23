@@ -5,8 +5,9 @@
     FIRELESS_WAR__SERVICE_ACCOUNT_JSON    the service account key file's contents (read-only Sheets/Drive)
     FIRELESS_WAR__DRIVE_FOLDER_ID         Drive folder holding the session files
     FIRELESS_WAR__APPS_SCRIPT_URL         Apps Script web app (/exec) that copies the template
-    FIRELESS_WAR__APPS_SCRIPT_SECRET      must equal SECRET in apps_script/Code.gs
-    FIRELESS_WAR__ALLOWED_ORIGINS         exact web origins, e.g. https://beethoreven.github.io
+    FIRELESS_WAR__APPS_SCRIPT_SECRET      must equal SECRET in the Apps Script project (its code lives only in
+                                          the Apps Script editor)
+    FIRELESS_WAR__ALLOWED_ORIGINS         exact web origins, e.g. https://fireless-war.github.io,https://beethoreven.github.io
     FIRELESS_WAR__SPREADSHEET_ID          optional: sheet /round reads when no spreadsheet_id is passed
 
 No defaults are written here: a missing required value makes every request answer 503 not_configured
@@ -32,7 +33,8 @@ VALID_TYPES = ["Morning", "Report"]
 # Final has no Morning, only Report (the end-of-game result).
 DAYS_WITHOUT_MORNING = ["Final"]
 
-# Must match apps_script/Code.gs: find_record searches Drive for the name Apps Script creates.
+# Must match the names the Apps Script project gives new files (its code lives only in the Apps Script
+# editor): find_record searches Drive for exactly these names.
 RECORD_FILENAME_PREFIX = "FirelessWar_"
 DEMO_RECORD_FILENAME_PREFIX = "FirelessWar_Demo_"
 
