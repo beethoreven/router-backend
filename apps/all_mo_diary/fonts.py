@@ -2,7 +2,11 @@
 versioned release that the phones download with the daily check.
 
 - Each font: id, display name, sort order, disabled, licensed (a label only — uploads are never
-  blocked on it), and its file on the GitHub Release (download URL, sizes, SHA-256s).
+  blocked on it), attribution, and its file on the GitHub Release (download URL, sizes, SHA-256s).
+- attribution is the font's source and licence statement, shown as written next to the font in the
+  app. Some licences only allow a font to be offered with that statement (Taiwan's Open Government
+  Data License treats a missing one as never having had the licence), so it travels with the list.
+  Empty when a font needs none.
 - IDs come from an IDENTITY column, never change and are never
   reused; a font that has been published can't be deleted, only disabled (phones may have diaries
   that name it).
@@ -18,8 +22,11 @@ from shared.textutil import graphemes
 from shared.timeutil import next_stamp
 
 NAME_MAX = 40
-_COLUMNS = ("id", "name", "sort", "disabled", "licensed", "file_name", "download_url", "download_bytes",
-            "download_sha256", "font_bytes", "font_sha256", "published", "updated_at")
+# Room for a copyright line, a licence name and an address, or for the three-line attribution notice
+# of the Open Government Data License.
+ATTRIBUTION_MAX = 500
+_COLUMNS = ("id", "name", "sort", "disabled", "licensed", "attribution", "file_name", "download_url",
+            "download_bytes", "download_sha256", "font_bytes", "font_sha256", "published", "updated_at")
 
 
 class FontError(ValueError):
@@ -49,13 +56,21 @@ def _name(value) -> str:
     return value.strip()
 
 
+def _attribution(value) -> str:
+    """Kept as written apart from the surrounding blank space; line breaks inside are allowed."""
+    if not isinstance(value, str) or graphemes(value.strip()) > ATTRIBUTION_MAX:
+        raise FontError(f"來源／授權說明要是文字，最多 {ATTRIBUTION_MAX} 個字")
+    return value.strip()
+
+
 def create(cur, data: dict) -> int:
     name = _name(data.get("name"))
     sort = data.get("sort", 0)
     if isinstance(sort, bool) or not isinstance(sort, int):
         raise FontError("排序要是整數")
-    cur.execute("INSERT INTO fonts (name, sort, licensed) VALUES (%s, %s, %s) RETURNING id",
-                (name, sort, bool(data.get("licensed", False))))
+    attribution = _attribution(data.get("attribution", ""))
+    cur.execute("INSERT INTO fonts (name, sort, licensed, attribution) VALUES (%s, %s, %s, %s) RETURNING id",
+                (name, sort, bool(data.get("licensed", False)), attribution))
     return int(cur.fetchone()[0])
 
 
@@ -67,6 +82,8 @@ def update(cur, font_id: int, data: dict) -> bool:
         if isinstance(data["sort"], bool) or not isinstance(data["sort"], int):
             raise FontError("排序要是整數")
         fields["sort"] = data["sort"]
+    if "attribution" in data:
+        fields["attribution"] = _attribution(data["attribution"])
     for key in ("disabled", "licensed"):
         if key in data:
             if not isinstance(data[key], bool):
@@ -108,12 +125,16 @@ def latest_release(cur) -> dict | None:
 
 def publish(cur, by: str) -> dict:
     """Publishes every font that has a file. Disabled fonts are listed with disabled = true, so phones
-    keep showing their name for diaries that use them but don't offer them for download."""
+    keep showing their name for diaries that use them but don't offer them for download.
+
+    The app reads the keys it knows from each font and ignores the rest, so a key can be added here
+    without breaking installed versions; a key that is already published keeps its name and meaning."""
     fonts = [f for f in list_drafts(cur) if f["download_url"]]
     if not fonts:
         raise FontError("還沒有任何上傳了檔案的字體")
     content = {"fonts": [
         {"id": f["id"], "name": f["name"], "sort": f["sort"], "disabled": f["disabled"], "licensed": f["licensed"],
+         "attribution": f["attribution"],
          "file_name": f["file_name"], "download_url": f["download_url"], "download_bytes": f["download_bytes"],
          "download_sha256": f["download_sha256"], "font_bytes": f["font_bytes"], "font_sha256": f["font_sha256"]}
         for f in fonts

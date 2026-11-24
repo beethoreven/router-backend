@@ -43,6 +43,7 @@ CREATE TABLE IF NOT EXISTS fonts (
     sort            INTEGER NOT NULL DEFAULT 0,
     disabled        BOOLEAN NOT NULL DEFAULT false,
     licensed        BOOLEAN NOT NULL DEFAULT false,
+    attribution     TEXT NOT NULL DEFAULT '',
     file_name       TEXT NOT NULL DEFAULT '',
     download_url    TEXT NOT NULL DEFAULT '',
     download_bytes  BIGINT NOT NULL DEFAULT 0,
@@ -85,6 +86,9 @@ CREATE INDEX IF NOT EXISTS feedback_email_idx ON feedback (email, received_at);
 
 def _create_tables(cur) -> None:
     cur.execute(SCHEMA)
+    # CREATE TABLE IF NOT EXISTS leaves a table that already exists as it is, so a column added to
+    # SCHEMA is also added here for databases whose table was created without it.
+    cur.execute("ALTER TABLE fonts ADD COLUMN IF NOT EXISTS attribution TEXT NOT NULL DEFAULT ''")
     cur.execute("INSERT INTO app_config (id) VALUES (true) ON CONFLICT DO NOTHING")
 
 
