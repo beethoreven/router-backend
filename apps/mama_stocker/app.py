@@ -1,6 +1,6 @@
 """mama-stocker（LINE 查股價 bot）的 Flask app，掛在 /mama-stocker。
 
-    GET  /mama-stocker/warm                觸發預抓用（cron-job.org 每 10 分鐘），不碰資料庫、不對外連線
+    GET  /mama-stocker/warm                觸發預抓用（cron-job.org 平日 08:05～21:55 每 10 分鐘），不碰資料庫、不對外連線
     POST /mama-stocker/line/webhook        LINE Messaging API 的 webhook
     GET  /mama-stocker/line/img/<token>.png  走勢圖（LINE 照 bot 回出去的簽名網址來抓）
 
@@ -110,7 +110,7 @@ def _start_warm_up():
     執行緒還活著。
 
     ★ 整台的保活打的是 router 的 /health，**不會**經過這裡。
-      所以 cron-job.org 另外每 10 分鐘打一次 /mama-stocker/warm，預抓才是定時的。
+      所以 cron-job.org 另外在平日 08:05～21:55 每 10 分鐘打一次 /mama-stocker/warm，預抓才是定時的。
     ★ 頻率的閘門只有這裡的「間隔＋鎖」：before_request 對 /mama-stocker 底下任何請求都會跑，
       連亂打的 404 也算，不能假設只有 cron 會來。
 

@@ -4,7 +4,8 @@
     .venv/bin/python -m apps.mama_stocker.dry_run --base http://localhost:5010/mama-stocker 台積電
 
 讀 router-backend/.env 的兩個值（這是本機工具，不在服務裡跑）：
-    MAMA_STOCKER__LINE_CHANNEL_SECRET   簽 webhook 用（跟線上同一把）
+    MAMA_STOCKER__LINE_CHANNEL_SECRET   簽 webhook 用。對線上試跑要跟 Render 上的值相同，
+                                        不同就會拿到 401 bad_signature；開發機上沒放正式值時，只能用 --base 對本機服務試跑
     MAMA_STOCKER__DRY_RUN_USER_ID       假裝是誰在問：要是 users 表裡開通過的 userId，不然只會回「沒有權限」
 """
 
