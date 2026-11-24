@@ -88,6 +88,15 @@ TEST_DATABASE_URL=postgresql://postgres@localhost:5434/amd_test .venv/bin/python
 
 本機設定寫在 `router-backend/.env`（不進版本控制），變數名稱一樣要有前綴。
 
+### 套件版本
+
+直接相依寫在 `requirements.in`、`requirements-dev.in`。`requirements.txt`、`requirements-dev.txt` 是產生出來的：每個間接相依都釘版本、附雜湊，不要手改。檔案裡有雜湊時，pip 會自動要求每個套件都比對雜湊，Render 照常 `pip install -r requirements.txt` 就好。改了 `.in` 之後重新產生（[uv](https://docs.astral.sh/uv/)）：
+
+```bash
+uv pip compile requirements.in --generate-hashes --python-version 3.15 --no-header --annotation-style line -o requirements.txt
+uv pip compile requirements-dev.in --generate-hashes --python-version 3.15 --no-header --annotation-style line -o requirements-dev.txt
+```
+
 ## 部署
 
 Render Web Service，start command：`gunicorn wsgi:app --workers 1 --threads 16 --timeout 120`。推到 main 就會部署。設定檢查不過時新版起不來，Render 繼續跑舊版。這個服務要單獨放在一個 Render workspace：750 小時的額度是整個 workspace 共用的。

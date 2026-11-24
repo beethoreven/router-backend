@@ -1,0 +1,5 @@
+# Test-only additions; requirements-dev.txt is generated from this file, constrained to the
+# versions in requirements.txt so tests run against what production installs.
+-c requirements.txt
+-r requirements.in
+pytest==9.2.0

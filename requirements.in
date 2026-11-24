@@ -1,0 +1,28 @@
+# Direct dependencies. requirements.txt is generated from this file with every transitive
+# dependency pinned and hashed; edit this file, then regenerate (see README, 套件版本).
+# Every package is pinned to the latest stable release (checked on PyPI 2026-11-25).
+# When adding or upgrading a package, try the newest release first; only step back when it really
+# doesn't work, and write down here why. The Python version lives in .python-version (3.15.2).
+#
+Flask==3.1.3
+Werkzeug==3.1.9
+gunicorn==27.0.1
+python-dotenv==1.2.4
+# Verifying Google ID tokens at sign-in (shared/google_auth.py).
+google-auth==2.63.1
+# google-auth re-fetches Google's signing keys on every verification; CacheControl makes it honour
+# Google's Cache-Control header instead.
+cachecontrol==0.15.0
+requests==2.34.2
+# Postgres (Neon) for the apps that have a database. Each request opens its own connection (shared/database.py).
+psycopg[binary]==3.3.9
+# CORS for the web frontends on GitHub Pages (shared/flask_app.allow_cors; exact origins only).
+Flask-Cors==6.0.5
+# Counting characters the way people do (an emoji is one): `\X` grapheme clusters.
+regex==2026.11.23
+# fireless-war: site-wide rate limits that protect the shared Google Sheets quota (checked PyPI 2026-11-11).
+Flask-Limiter==4.1.1
+# fireless-war: reading each game's Google Sheet with the service account (checked PyPI 2026-11-11).
+gspread==6.2.1
+# Drawing mama-stocker's five-year price chart as a PNG (apps/mama_stocker/line_utils/draw.py).
+Pillow==13.0.0
