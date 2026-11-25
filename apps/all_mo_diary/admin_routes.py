@@ -78,14 +78,16 @@ def login():
     if claims is None:
         rejections.note("admin login: invalid Google token")
         return _error(401, "invalid_token", "Google 憑證無效")
-    g.audit_actor = claims["email"]
     if not login_attempts.try_take(claims["sub"]):
         rejections.note("admin login: too many")
         return _error(429, "too_many", "登入嘗試太多次，明天再試")
     with db.connection() as conn:
         with conn.cursor() as cur:
             if not admin.admins.is_admin(cur, claims["email"]):
+                # Not recorded: the privacy policy says sign-in credentials aren't kept, and a non-admin's
+                # email would be. Only admins get an audit row for signing in.
                 return _error(403, "forbidden", "這個帳號不是管理員")
+            g.audit_actor = claims["email"]
             admin.sessions.purge_expired(cur)
             token = admin.sessions.create(cur, claims["email"])
     return jsonify({"token": token, "email": claims["email"]})

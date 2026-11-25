@@ -44,6 +44,7 @@ def test_writes_and_logins_are_recorded_newest_first(diary):
 
 def test_denied_requests_name_who_was_turned_away(diary):
     admin = admin_headers(diary)
+    # a non-admin's sign-in is refused and leaves no row: their email isn't kept (privacy policy)
     assert diary.post(f"{ADMIN}/login", json={"credential": "tok:u9:someone@example.com"}).status_code == 403
     # a session whose account stopped being an admin (removed from the list, session left behind)
     assert diary.post(f"{ADMIN}/admins", json={"email": "second@example.com"}, headers=admin).status_code == 201
@@ -55,9 +56,20 @@ def test_denied_requests_name_who_was_turned_away(diary):
     # no identity at all: not recorded (rejections.py counts it)
     assert diary.delete(f"{ADMIN}/fonts/1").status_code == 401
 
-    denied = [(r["actor"], r["action"]) for r in _rows(diary, admin) if r["result"] == "denied"]
-    assert denied == [("second@example.com", "diary_admin.overview"),
-                      ("someone@example.com", "diary_admin.login")]
+    rows = _rows(diary, admin)
+    denied = [(r["actor"], r["action"]) for r in rows if r["result"] == "denied"]
+    assert denied == [("second@example.com", "diary_admin.overview")]
+    assert "someone@example.com" not in str(rows)
+
+
+def test_requests_without_an_identity_are_never_recorded(diary):
+    admin = admin_headers(diary)
+    before = len(_rows(diary, admin))
+    assert diary.post(f"{ADMIN}/logout").status_code == 200           # no token, still 200
+    assert diary.post(f"{ADMIN}/login", json={"x": 1}).status_code in (400, 401)
+    assert diary.post(f"{ADMIN}/login", data="not json",
+                      headers={"Content-Type": "application/json"}).status_code >= 400
+    assert len(_rows(diary, admin)) == before
 
 
 def test_only_admins_can_read_it_and_pages_go_back_in_time(diary):

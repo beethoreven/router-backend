@@ -15,7 +15,9 @@ content, tokens or IPs.
 What gets recorded, by the blueprint hook:
 - every POST/PUT/PATCH/DELETE on the blueprint, whatever its outcome;
 - any request turned away with 403 (a signed-in account that isn't an admin, or a login by a non-admin).
-  401s without an identity aren't recorded: rejections.py already counts them, and there's nobody to name.
+- only when there is an actor: g.admin_email, or g.audit_actor set by the app. A request with no identity
+  (no session, a bad token, a malformed login, logout without a token) is never recorded, whatever its
+  status: rejections.py already counts those, and recording them would let anyone fill the table.
 
 ★ The row is written after the route has run, in its own short transaction, not in the route's. That way
   every admin route is covered without each one having to remember to log, and a route added later is
@@ -118,7 +120,9 @@ class AuditLog:
         if request.method not in _WRITE_METHODS and status != 403:
             return response
         actor = getattr(g, "admin_email", None) or getattr(g, "audit_actor", None)
-        if status in (401, 403) and not actor:
+        if not actor:
+            # Nobody to name (no session, a bad token, a malformed login): anyone can send these as often
+            # as they like, so writing a row would let strangers wake the database and fill the table.
             return response
         target = getattr(g, "audit_target", None)
         if target is None:
