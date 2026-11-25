@@ -7,7 +7,7 @@ import uuid
 
 import psycopg
 
-from tests.mama_fufood.conftest import admin_headers, bearer
+from tests.mama_fufood.conftest import admin_headers, pass_headers
 
 
 def _login(client, sub: str, email: str) -> str:
@@ -134,7 +134,7 @@ def test_feedback_actions_keep_no_address_or_note(client, admin_token):
     body = {"id": fid, "kind": "suggestion", "description": "好用", "device_time": "2026-11-21T10:00:00+08:00",
             "install_id": str(uuid.uuid4()), "app_version": "2.0.1", "build_number": "2001",
             "device_model": "SM-G991B", "os_version": "Android 14 (API 34)", "snapshot": {}}
-    assert client.post("/api/v1/feedback", json=body, headers=bearer()).status_code == 201
+    assert client.post("/api/v1/feedback", json=body, headers=pass_headers()).status_code == 201
     assert client.patch(f"/api/admin/feedback/{fid}", headers=h, json={"status": "done", "admin_note": "已回覆"}).status_code == 200
     assert client.delete(f"/api/admin/feedback/{fid}", headers=h).status_code == 200
     assert client.post("/api/admin/feedback/delete-by-email", headers=h, json={"email": "mom@example.com"}).status_code == 200

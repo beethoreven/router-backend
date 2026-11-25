@@ -4,12 +4,12 @@ from __future__ import annotations
 
 import pytest
 
-from tests.mama_fufood.conftest import admin_headers, bearer, load_seed
+from tests.mama_fufood.conftest import admin_headers, load_seed, pass_headers
 
 
 
 def _check(client, food_version):
-    return client.post("/api/v1/check", headers=bearer(), json={
+    return client.post("/api/v1/check", headers=pass_headers(), json={
         "app_version": "1.0.0",
         "datasets": {"food_list": {"version": food_version, "formats": [1]}},
     }).get_json()
@@ -167,7 +167,7 @@ def test_admin_lone_surrogates_note_path_and_filters_are_bad_requests(client, ad
     assert client.post("/api/admin/foods", headers=h, data=raw, content_type="application/json").status_code == 400
     # 意見回饋的處理備註。
     fid = str(uuid.uuid4())
-    assert client.post("/api/v1/feedback", headers=bearer(), json={
+    assert client.post("/api/v1/feedback", headers=pass_headers(), json={
         "id": fid, "kind": "suggestion", "description": "好用", "device_time": "2026-11-21T10:00:00+08:00",
         "install_id": str(uuid.uuid4()), "app_version": "2.0.1", "build_number": "2001",
         "device_model": "SM-G991B", "os_version": "Android 14 (API 34)", "snapshot": {}}).status_code == 201

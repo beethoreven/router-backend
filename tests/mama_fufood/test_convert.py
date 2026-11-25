@@ -8,7 +8,7 @@ import json
 
 from apps.mama_fufood import export_formats
 from apps.mama_fufood import routes as public
-from tests.mama_fufood.conftest import bearer, gz, load_sample
+from tests.mama_fufood.conftest import gz, load_sample, pass_headers
 
 CUR = export_formats.CURRENT
 NEXT = CUR + 1
@@ -16,7 +16,7 @@ NEXT = CUR + 1
 
 def _post(client, data, headers=None):
     return client.post("/api/v1/convert", data=gz(data), headers={
-        **(headers if headers is not None else bearer()),
+        **(headers if headers is not None else pass_headers()),
         "Content-Type": "application/json", "Content-Encoding": "gzip", "Accept-Encoding": "gzip"})
 
 
@@ -81,7 +81,7 @@ def test_lone_surrogates_are_rejected_before_counting(client):
     old["babies"][0]["records"][0]["note"] = "備\udfff註"
     body = gzip.compress(json.dumps(old).encode("ascii"))  # 標準的 json.dumps 才送得出落單的代理字元
     resp = client.post("/api/v1/convert", data=body, headers={
-        **bearer(), "Content-Type": "application/json", "Content-Encoding": "gzip", "Accept-Encoding": "gzip"})
+        **pass_headers(), "Content-Type": "application/json", "Content-Encoding": "gzip", "Accept-Encoding": "gzip"})
     assert resp.status_code == 422, resp.get_json()
     assert resp.get_json()["code"] == "invalid_file"
     assert public.convert_quota.used("user-1") == 0
@@ -115,9 +115,9 @@ def test_converter_bug_gives_the_quota_back(client, monkeypatch):
 def test_uncompressed_or_oversized_bodies(client, monkeypatch):
     _fake_v2(monkeypatch)
     plain = client.post("/api/v1/convert", data=json.dumps(load_sample(CUR)), headers={
-        **bearer(), "Content-Type": "application/json"})
+        **pass_headers(), "Content-Type": "application/json"})
     assert plain.status_code == 200
     bomb = gzip.compress(b"[" + b"0," * (17 * 1024 * 1024) + b"0]")
     resp = client.post("/api/v1/convert", data=bomb, headers={
-        **bearer(), "Content-Type": "application/json", "Content-Encoding": "gzip"})
+        **pass_headers(), "Content-Type": "application/json", "Content-Encoding": "gzip"})
     assert resp.status_code == 413

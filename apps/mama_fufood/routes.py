@@ -63,16 +63,11 @@ def _error(status: int, code: str, message: str, **extra):
 
 
 def _identify():
-    """App 的請求帶通行證(auth.app_pass)。
+    """App 的請求只收通行證(auth.app_pass)。Google 的 ID Token 只有登入的 /api/v1/session 收。
 
-    也還接受 Google ID Token:通行證之前發出去的 App(改成 0.1.0 之前、當時標成 1.0.0 的那批安裝)只會送 ID Token。
-    那些安裝都更新到會換通行證的版本之後,這一支就可以拿掉(只剩 /api/v1/session 收 ID Token)。
+    ★ 不是通行證就直接拒絕,不拿去給 Google 驗:沒登入的請求不會讓伺服器去抓 Google 的金鑰。
     """
-    token = google_auth.extract_bearer_token(request)
-    if app_pass.looks_like(token):
-        claims = app_pass.verify(secret(), token)
-    else:
-        claims = google_auth.verify(token, config.get().google_client_id)
+    claims = app_pass.verify(secret(), google_auth.extract_bearer_token(request))
     if claims is None:
         rejections.note("無效憑證")
         return None, _error(401, "invalid_token", "登入憑證無效或已過期")

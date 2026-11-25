@@ -126,10 +126,19 @@ def test_daily_check_accepts_the_pass_and_renews_old_ones(client, db):
     assert data["session_expires_at"] > time.time()
 
 
-def test_old_apps_sending_a_google_token_still_work(client, db):
-    """通行證之前發出去的 App 每次都帶 Google ID Token,還要能用。"""
-    body = {"app_version": "1.0.0", "datasets": {"food_list": {"version": None, "formats": [1]}}}
-    assert client.post("/api/v1/check", json=body, headers=bearer()).status_code == 200
+def test_a_google_token_is_not_a_pass(client, monkeypatch):
+    """每日檢查、意見回饋、格式轉換只收通行證:Google 的 ID Token 直接 401,而且不拿去給 Google 驗。"""
+    asked = []
+
+    def counting_verify(token, client_id):
+        asked.append(token)
+        return {"sub": "user-1", "email": "mom@example.com"}  # 就算是真的 Google 帳號也不收
+
+    monkeypatch.setattr(google_auth, "verify", counting_verify)
+    for path in ("/api/v1/check", "/api/v1/feedback", "/api/v1/convert"):
+        resp = client.post(path, json={}, headers=bearer())
+        assert resp.status_code == 401 and resp.get_json()["code"] == "invalid_token", path
+    assert asked == []
 
 
 def test_google_unreachable_is_503_not_401(client, monkeypatch):
