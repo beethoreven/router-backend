@@ -3,6 +3,7 @@
 - app_pass:App 登入後存在手機上的通行證(shared.app_pass)。
 - admin:管理後台的 session、管理員名單與 require_admin 這道門(shared.admin_auth)。
 - rejections:被拒絕的請求只計數(shared.rejections)。
+- audit:管理後台的操作紀錄(shared.audit_log),保留 180 天。
 
 ★ prefix、purpose、sessions 表名與 MAMA_FUFOOD__SESSION_SECRET 都不能改:通行證與後台 session 的
   簽章由它們決定,改了任何一個,已經發出去的通行證與後台登入都會失效,所有人都要重新登入。
@@ -12,6 +13,7 @@ from __future__ import annotations
 
 from shared.admin_auth import AdminAuth
 from shared.app_pass import AppPass
+from shared.audit_log import AuditLog
 from shared.rejections import RejectionLog
 
 from . import config, db
@@ -31,6 +33,8 @@ admin = AdminAuth(
 )
 
 rejections = RejectionLog("mama-fufood")
+
+audit = AuditLog(database=db.database, table="admin_audit_log")
 
 
 def secret() -> str:

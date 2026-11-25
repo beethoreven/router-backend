@@ -1,4 +1,4 @@
-"""管理後台的「登出所有裝置」與操作紀錄。"""
+"""管理後台的「登出所有裝置」與操作紀錄(shared.audit_log 接在後台的 blueprint 上)。"""
 
 from __future__ import annotations
 
@@ -16,14 +16,14 @@ def _login(client, sub: str, email: str) -> str:
     return resp.get_json()["token"]
 
 
-def _audit(client, token: str) -> list[dict]:
-    resp = client.get("/api/admin/audit", headers=admin_headers(token))
+def _rows(client, token: str, query: str = "") -> list[dict]:
+    resp = client.get("/api/admin/audit" + query, headers=admin_headers(token))
     assert resp.status_code == 200, resp.get_json()
     return resp.get_json()["items"]
 
 
-def _actions(client, token: str) -> list[str]:
-    return [item["action"] for item in _audit(client, token)]
+def _brief(rows: list[dict]) -> list[tuple]:
+    return [(r["actor"], r["action"], r["target"], r["result"]) for r in rows]
 
 
 def test_logout_all_ends_every_session_of_this_admin_only(client, admin_token):
@@ -40,8 +40,7 @@ def test_logout_all_ends_every_session_of_this_admin_only(client, admin_token):
     assert client.get("/api/admin/me", headers=h).status_code == 401
     assert client.get("/api/admin/me", headers=admin_headers(other_device)).status_code == 401
     assert client.get("/api/admin/me", headers=admin_headers(second)).get_json()["email"] == "second@example.com"
-    entry = next(i for i in _audit(client, second) if i["action"] == "logout_all")
-    assert entry["email"] == "admin@example.com" and entry["detail"] == {"sessions": 2}
+    assert ("admin@example.com", "admin.logout_all", "", "ok") in _brief(_rows(client, second))
 
 
 def test_logout_all_needs_a_session(client, db):
@@ -72,40 +71,64 @@ def test_audit_needs_an_admin_session(client, db):
     assert client.get("/api/admin/audit", headers={"Authorization": "Bearer " + "0" * 64}).status_code == 401
 
 
-def test_admin_actions_are_recorded_newest_first(client, admin_token):
+def test_writes_and_logins_are_recorded_newest_first(client, admin_token):
     h = admin_headers(admin_token)
-    new_food = client.post("/api/admin/foods", headers=h, json={"group_id": 7, "name": "百香果", "emoji": "🍈"})
-    food_id = new_food.get_json()["id"]
+    food_id = client.post("/api/admin/foods", headers=h, json={"group_id": 7, "name": "百香果", "emoji": "🍈"}).get_json()["id"]
     assert client.patch(f"/api/admin/foods/{food_id}", headers=h, json={"name": "芭樂", "published": False}).status_code == 200
-    publish = client.post("/api/admin/publish/food_list", headers=h).get_json()
-    assert client.put("/api/admin/app-config", headers=h, json={"min_app_version": "2.0.0", "force_reason": "修正"}).status_code == 200
+    assert client.post("/api/admin/foods", headers=h, json={"group_id": 1, "name": "四個字的", "emoji": "🍚"}).status_code == 400
+    assert client.post("/api/admin/publish/food_list", headers=h).status_code == 200
+    assert client.put("/api/admin/app-config", headers=h,
+                      json={"min_app_version": "2.0.0", "force_reason": "修正閃退"}).status_code == 200
     assert client.post("/api/admin/admins", headers=h, json={"email": "second@example.com", "note": "家人"}).status_code == 201
     assert client.delete("/api/admin/admins/second@example.com", headers=h).status_code == 200
+    assert client.get("/api/admin/overview", headers=h).status_code == 200  # 讀取不記
 
-    items = _audit(client, admin_token)
-    assert [i["action"] for i in items] == [
-        "admin_remove", "admin_add", "app_config_update", "publish", "food_update", "food_create", "login"]
-    by_action = {i["action"]: i for i in items}
-    assert all(i["email"] == "admin@example.com" for i in items)
-    assert by_action["food_create"]["detail"] == {"id": food_id, "group_id": 7, "name": "百香果", "emoji": "🍈"}
-    # 只記白名單欄位,和真正寫進資料庫的一致。
-    assert by_action["food_update"]["detail"] == {"id": food_id, "name": "芭樂"}
-    assert by_action["publish"]["detail"] == {"dataset": "food_list", "version": publish["version"]}
-    assert by_action["app_config_update"]["detail"] == {"min_app_version": "2.0.0", "force_reason": "修正"}
-    assert by_action["admin_add"]["detail"] == {"email": "second@example.com"}
-    assert by_action["admin_remove"]["detail"] == {"email": "second@example.com"}
+    rows = _rows(client, admin_token)
+    assert _brief(rows) == [
+        ("admin@example.com", "admin.remove_admin", "email=second@example.com", "ok"),
+        ("admin@example.com", "admin.add_admin", "second@example.com", "ok"),
+        ("admin@example.com", "admin.put_app_config", "", "ok"),
+        ("admin@example.com", "admin.publish", "dataset=food_list", "ok"),
+        ("admin@example.com", "admin.create_food", "", "failed"),
+        ("admin@example.com", "admin.update_food", f"item_id={food_id}", "ok"),
+        # 新增的項目編號不在網址裡,由路由補上。
+        ("admin@example.com", "admin.create_food", f"item_id={food_id}", "ok"),
+        ("admin@example.com", "admin.login", "", "ok"),
+    ]
+    # 請求的內容(名稱、原因、備註)一個字都不留。
+    dump = str(rows)
+    assert all(text not in dump for text in ("百香果", "芭樂", "修正閃退", "家人"))
 
 
-def test_failed_changes_leave_no_record(client, admin_token):
+def test_a_non_admin_sign_in_leaves_nothing_behind(client, admin_token, db):
+    """隱私權政策寫明網站登入的憑證用完即丟、不寫進資料庫:非管理員被拒的那一次,操作紀錄也不能留下 Email。"""
+    resp = client.post("/api/admin/login", json={"credential": "tok:u9:someone@example.com"})
+    assert resp.status_code == 403
+    assert [r for r in _rows(client, admin_token) if r["result"] != "ok"] == []
+    with psycopg.connect(db) as conn:
+        for table in ("admin_audit_log", "sessions", "admins"):
+            dump = conn.execute(f"SELECT coalesce(string_agg(t::text, ' '), '') FROM {table} t").fetchone()[0]
+            assert "someone@example.com" not in dump, table
+
+
+def test_a_former_admin_who_is_turned_away_is_recorded(client, admin_token, db):
     h = admin_headers(admin_token)
-    assert client.post("/api/admin/foods", headers=h, json={"group_id": 1, "name": "四個字的", "emoji": "🍚"}).status_code == 400
-    assert client.delete("/api/admin/foods/1", headers=h).status_code == 400  # 發布過的不能刪
-    assert client.delete("/api/admin/admins/nobody@example.com", headers=h).status_code == 404
-    assert client.delete(f"/api/admin/feedback/{uuid.uuid4()}", headers=h).status_code == 404
-    assert _actions(client, admin_token) == ["login"]
+    assert client.post("/api/admin/admins", headers=h, json={"email": "second@example.com"}).status_code == 201
+    second = _login(client, "s", "second@example.com")
+    # 從名單拿掉了,session 卻還在(例如直接在資料庫刪了名單)。
+    with psycopg.connect(db) as conn:
+        conn.execute("DELETE FROM admins WHERE email = 'second@example.com'")
+    from apps.mama_fufood import auth
+    auth.admin.forget_all()
+    assert client.get("/api/admin/overview", headers=admin_headers(second)).status_code == 403
+    # 完全沒有身分:不記(shared.rejections 只計數)。
+    assert client.delete("/api/admin/foods/1").status_code == 401
+
+    denied = [(r["actor"], r["action"]) for r in _rows(client, admin_token) if r["result"] == "denied"]
+    assert denied == [("second@example.com", "admin.overview")]
 
 
-def test_feedback_actions_are_recorded_without_the_deleted_email(client, admin_token, db):
+def test_feedback_actions_keep_no_address_or_note(client, admin_token):
     h = admin_headers(admin_token)
     fid = str(uuid.uuid4())
     body = {"id": fid, "kind": "suggestion", "description": "好用", "device_time": "2026-11-21T10:00:00+08:00",
@@ -116,22 +139,71 @@ def test_feedback_actions_are_recorded_without_the_deleted_email(client, admin_t
     assert client.delete(f"/api/admin/feedback/{fid}", headers=h).status_code == 200
     assert client.post("/api/admin/feedback/delete-by-email", headers=h, json={"email": "mom@example.com"}).status_code == 200
 
-    by_action = {i["action"]: i for i in _audit(client, admin_token)}
-    assert by_action["feedback_update"]["detail"] == {"id": fid, "status": "done", "fields": ["admin_note", "status"]}
-    assert by_action["feedback_delete"]["detail"] == {"id": fid}
-    # 個資刪除請求:只記刪了幾則,不留下被刪的 Email。
-    assert by_action["feedback_delete_by_email"]["detail"] == {"deleted": 0}
-    with psycopg.connect(db) as conn:
-        dump = conn.execute("SELECT string_agg(detail::text, ' ') FROM admin_audit").fetchone()[0]
-    assert "mom@example.com" not in dump
+    rows = _rows(client, admin_token)
+    assert _brief(rows)[:3] == [
+        # 個資刪除請求:留下被刪的 Email,就違背了刪除請求。
+        ("admin@example.com", "admin.delete_feedback_by_email", "", "ok"),
+        ("admin@example.com", "admin.delete_feedback", f"feedback_id={fid}", "ok"),
+        ("admin@example.com", "admin.update_feedback", f"feedback_id={fid}", "ok"),
+    ]
+    dump = str(rows)
+    assert "mom@example.com" not in dump and "已回覆" not in dump
 
 
-def test_audit_keeps_no_ip_and_old_entries_are_purged(client, admin_token, db):
+def test_pages_go_back_in_time(client, admin_token, db):
     with psycopg.connect(db) as conn:
-        columns = [r[0] for r in conn.execute(
-            "SELECT column_name FROM information_schema.columns WHERE table_name = 'admin_audit'")]
-        assert set(columns) == {"id", "at", "admin_email", "action", "detail"}
-        conn.execute("UPDATE admin_audit SET at = now() - interval '400 days'")
-    # 下一筆寫入時順便清掉超過保留天數(預設 365 天)的紀錄。
+        for i in range(55):
+            conn.execute("INSERT INTO admin_audit_log (actor, action, result) VALUES ('a', %s, 'ok')", (f"x{i}",))
+    first = _rows(client, admin_token)
+    assert len(first) == 50
+    older = _rows(client, admin_token, f"?before={first[-1]['id']}")
+    assert len(older) == 6  # 其餘 5 筆加上登入那一筆
+    assert older[0]["id"] < first[-1]["id"]
+
+
+def test_no_ip_or_content_columns_and_rows_past_180_days_go(client, admin_token, db):
+    with psycopg.connect(db) as conn:
+        columns = {r[0] for r in conn.execute(
+            "SELECT column_name FROM information_schema.columns WHERE table_name = 'admin_audit_log'")}
+        conn.execute("INSERT INTO admin_audit_log (at, actor, action, result) VALUES "
+                     "(now() - interval '181 days', 'old', 'x', 'ok'), (now() - interval '179 days', 'kept', 'x', 'ok')")
+    assert columns == {"id", "at", "actor", "action", "target", "result"}
+    # 下一筆寫入時順便清掉超過 180 天的紀錄。
     assert client.post("/api/admin/cache/reload", headers=admin_headers(admin_token)).status_code == 200
-    assert _actions(client, admin_token) == ["cache_reload"]
+    actors = [r["actor"] for r in _rows(client, admin_token)]
+    assert "old" not in actors and "kept" in actors
+
+
+def test_a_failed_audit_write_does_not_fail_the_request(client, admin_token, monkeypatch):
+    from apps.mama_fufood import auth
+
+    def boom(*_a, **_k):
+        raise RuntimeError("down")
+
+    monkeypatch.setattr(auth.audit, "record", boom)
+    resp = client.put("/api/admin/app-config", headers=admin_headers(admin_token), json={"min_app_version": "2.0.0"})
+    assert resp.status_code == 200
+
+
+def test_requests_without_an_identity_do_not_touch_the_database(client, db, monkeypatch):
+    """誰都能送、又沒有 IP 限流的請求,不能叫醒資料庫或讓紀錄表一直變大。"""
+    from apps.mama_fufood import admin_routes
+    from apps.mama_fufood import db as app_db
+
+    opened = []
+    real = app_db.database.connection
+
+    def counting():
+        opened.append(1)
+        return real()
+
+    monkeypatch.setattr(app_db.database, "connection", counting)
+    monkeypatch.setattr(admin_routes.login_attempts, "_limit", lambda: 1)
+    # 非管理員第一次登入要查名單(碰資料庫);之後超過次數就在記憶體擋下。
+    assert client.post("/api/admin/login", json={"credential": "tok:u9:someone@example.com"}).status_code == 403
+    opened.clear()
+    assert client.post("/api/admin/login", json={"credential": "tok:u9:someone@example.com"}).status_code == 429
+    assert client.post("/api/admin/logout").status_code == 200
+    assert client.post("/api/admin/logout", headers={"Authorization": "Bearer " + "0" * 64}).status_code == 200
+    assert client.post("/api/admin/login", data=b"{not json", content_type="application/json").status_code == 400
+    assert opened == []

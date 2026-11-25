@@ -37,8 +37,6 @@ class FufoodConfig:
     # 意見回饋資料表超過這個大小就不再收附件(記錄檔),並在後台顯示警告。
     feedback_table_limit_mb: int = 150
     session_idle_days: int = 90
-    # 後台操作紀錄保留幾天(寫入新紀錄時順便清掉更舊的)。
-    audit_retention_days: int = 365
     # 「這張 session 是哪個管理員」的快取秒數。拿掉權限後最慢這麼久生效。
     auth_cache_ttl_seconds: int = 30
     # 第一個請求進來時在背景載入公用資料快取。只有測試會關掉。
@@ -60,7 +58,6 @@ class FufoodConfig:
             feedback_retention_days=s.int("FEEDBACK_RETENTION_DAYS", 90),
             feedback_table_limit_mb=s.int("FEEDBACK_TABLE_LIMIT_MB", 150),
             session_idle_days=s.int("SESSION_IDLE_DAYS", 90),
-            audit_retention_days=s.int("AUDIT_RETENTION_DAYS", 365),
             auth_cache_ttl_seconds=s.int("AUTH_CACHE_TTL_SECONDS", 30),
             start_cache_loader=s.text("START_CACHE_LOADER", "1") != "0",
         )

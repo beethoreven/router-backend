@@ -21,7 +21,8 @@
     app_config        最低可用 App 版本、強制更新的原因等(只有一列)
     formats           匯出格式的欄位定義,跟著後端程式發布,後台只能看
     feedback          意見回饋(含診斷記錄),最長保留 90 天
-    admin_audit       後台的操作紀錄(哪位管理員、什麼時候、做了什麼;不記 IP),見 audit.py
+    admin_audit_log   後台的操作紀錄(shared.audit_log 建的表,只記時間、帳號、動作、對象與結果;
+                      不記內容、token 與 IP),保留 180 天
 
 ★ ID 永遠不可改、不可刪、不可重用。分組、食材、單位的 ID 用
   IDENTITY 產生,序號只會往上,刪掉的草稿 ID 也不會再出現;發布過的項目不能刪,
@@ -35,6 +36,7 @@ from pathlib import Path
 
 from psycopg.types.json import Jsonb
 
+from shared import audit_log
 from shared.database import Database
 
 from . import config, export_formats
@@ -129,14 +131,6 @@ CREATE TABLE IF NOT EXISTS feedback (
 );
 CREATE INDEX IF NOT EXISTS feedback_received_idx ON feedback (received_at DESC);
 CREATE INDEX IF NOT EXISTS feedback_email_idx ON feedback (email, received_at);
-CREATE TABLE IF NOT EXISTS admin_audit (
-    id           BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    at           TIMESTAMPTZ NOT NULL DEFAULT now(),
-    admin_email  TEXT NOT NULL,
-    action       TEXT NOT NULL,
-    detail       JSONB NOT NULL DEFAULT '{}'::jsonb
-);
-CREATE INDEX IF NOT EXISTS admin_audit_at_idx ON admin_audit (at);
 """
 
 def _seed(cur, dataset: str) -> None:
@@ -208,6 +202,7 @@ def _sync_formats(cur) -> None:
 
 def _create_tables(cur) -> None:
     cur.execute(_DDL)
+    cur.execute(audit_log.schema_sql("admin_audit_log"))
     cur.execute("INSERT INTO app_config (id) VALUES (true) ON CONFLICT DO NOTHING")
     _seed(cur, "food_list")
     _seed(cur, "units")
