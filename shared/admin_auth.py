@@ -15,6 +15,10 @@
 Sessions (`admin.sessions`) — decoupled from Google's ID token:
 - The token is opaque: 40 random hex characters plus a 24-character HMAC tag. A token whose tag doesn't
   match was never issued by us, and is rejected without touching the database.
+- The table holds only the token's SHA-256 (column token_hash), so a copy of the database (a backup, a
+  leaked dump, a read-only role) can't be used to sign in. Create the table with
+  sessions_schema_sql(); upgrade_sessions_sql() moves a table that still stores plain tokens over to
+  hashes, signing everyone out once.
 - Sliding expiry: it expires only after `idle_days` days without any request, so nobody is signed out
   mid-task. last_seen_at is written at most once an hour.
 - The tag key comes from the app's secret and `purpose`. Keep the purpose (and the sessions table name)
@@ -72,8 +76,43 @@ def _table(name: str) -> str:
     return name
 
 
+def _hash(token: str) -> str:
+    return hashlib.sha256(token.encode("ascii")).hexdigest()
+
+
+def sessions_schema_sql(table: str = "admin_sessions") -> str:
+    """CREATE statement for the app's own schema function (db.py)."""
+    t = _table(table)
+    return f"""
+CREATE TABLE IF NOT EXISTS {t} (
+    token_hash    TEXT PRIMARY KEY,
+    email         TEXT NOT NULL,
+    created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+    last_seen_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+"""
+
+
+def upgrade_sessions_sql(table: str = "admin_sessions") -> str:
+    """For a table created before token_hash: its rows hold plain tokens, which can't be turned into the
+    hashes of themselves usefully (that would keep them working from a leaked copy), so they are deleted
+    and every admin signs in once. Runs inside the app's schema function, under its advisory lock, and
+    does nothing once the column has been renamed."""
+    t = _table(table)
+    return f"""
+DO $$
+BEGIN
+    IF EXISTS (SELECT 1 FROM information_schema.columns
+               WHERE table_schema = current_schema() AND table_name = '{t}' AND column_name = 'token') THEN
+        DELETE FROM {t};
+        ALTER TABLE {t} RENAME COLUMN token TO token_hash;
+    END IF;
+END $$;
+"""
+
+
 class AdminSessions:
-    """Rows: (token TEXT PRIMARY KEY, email TEXT, created_at, last_seen_at TIMESTAMPTZ)."""
+    """Rows: (token_hash TEXT PRIMARY KEY, email TEXT, created_at, last_seen_at TIMESTAMPTZ)."""
 
     def __init__(self, *, purpose: bytes, secret: Callable[[], str], idle_days: Callable[[], int],
                  table: str = "admin_sessions"):
@@ -100,31 +139,33 @@ class AdminSessions:
     def create(self, cur, email: str) -> str:
         random_part = secrets.token_hex(_RANDOM_HEX // 2)
         token = random_part + self._tag(random_part)
-        cur.execute(f"INSERT INTO {self.table} (token, email) VALUES (%s, %s)", (token, email.lower().strip()))
+        cur.execute(f"INSERT INTO {self.table} (token_hash, email) VALUES (%s, %s)",
+                    (_hash(token), email.lower().strip()))
         return token
 
     def resolve(self, cur, token: object) -> str | None:
         """The email for a valid token; None if invalid or idle too long (an expired row is deleted)."""
         if not self.looks_valid(token):
             return None
+        key = _hash(token)
         cur.execute(
-            f"SELECT email, last_seen_at > now() - make_interval(days => %s) FROM {self.table} WHERE token = %s",
-            (self._idle_days(), token))
+            f"SELECT email, last_seen_at > now() - make_interval(days => %s) FROM {self.table}"
+            " WHERE token_hash = %s", (self._idle_days(), key))
         row = cur.fetchone()
         if row is None:
             return None
         email, fresh = row
         if not fresh:
-            cur.execute(f"DELETE FROM {self.table} WHERE token = %s", (token,))
+            cur.execute(f"DELETE FROM {self.table} WHERE token_hash = %s", (key,))
             return None
         cur.execute(
             f"UPDATE {self.table} SET last_seen_at = now()"
-            f" WHERE token = %s AND last_seen_at < now() - interval '1 hour'", (token,))
+            f" WHERE token_hash = %s AND last_seen_at < now() - interval '1 hour'", (key,))
         return email
 
     def delete(self, cur, token: object) -> None:
         if self.looks_valid(token):
-            cur.execute(f"DELETE FROM {self.table} WHERE token = %s", (token,))
+            cur.execute(f"DELETE FROM {self.table} WHERE token_hash = %s", (_hash(token),))
 
     def delete_for_email(self, cur, email: str) -> None:
         cur.execute(f"DELETE FROM {self.table} WHERE email = %s", (email.lower().strip(),))

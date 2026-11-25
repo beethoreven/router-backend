@@ -11,7 +11,7 @@ so connections are rare.
 
 from __future__ import annotations
 
-from shared import audit_log
+from shared import admin_auth, audit_log
 from shared.database import Database
 
 from . import config
@@ -22,12 +22,6 @@ CREATE TABLE IF NOT EXISTS admins (
     note        TEXT NOT NULL DEFAULT '',
     created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
     created_by  TEXT NOT NULL DEFAULT ''
-);
-CREATE TABLE IF NOT EXISTS admin_sessions (
-    token         TEXT PRIMARY KEY,
-    email         TEXT NOT NULL,
-    created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
-    last_seen_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE TABLE IF NOT EXISTS app_config (
     id               BOOLEAN PRIMARY KEY DEFAULT true CHECK (id),
@@ -88,6 +82,8 @@ CREATE INDEX IF NOT EXISTS feedback_email_idx ON feedback (email, received_at);
 def _create_tables(cur) -> None:
     cur.execute(SCHEMA)
     cur.execute(audit_log.schema_sql("admin_audit_log"))
+    cur.execute(admin_auth.upgrade_sessions_sql("admin_sessions"))
+    cur.execute(admin_auth.sessions_schema_sql("admin_sessions"))
     # CREATE TABLE IF NOT EXISTS leaves a table that already exists as it is, so a column added to
     # SCHEMA is also added here for databases whose table was created without it.
     cur.execute("ALTER TABLE fonts ADD COLUMN IF NOT EXISTS attribution TEXT NOT NULL DEFAULT ''")
