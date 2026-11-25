@@ -41,7 +41,7 @@ import time
 from functools import wraps
 from typing import Callable
 
-from flask import g, jsonify, request
+from flask import g, has_request_context, jsonify, request
 
 from shared.database import Database
 from shared.google_auth import extract_bearer_token
@@ -236,6 +236,9 @@ class AdminAuth:
         if email is None:
             return None, BAD_TOKEN
         if not ok:
+            # Signed in but not an admin: the audit log (shared.audit_log) names who was turned away.
+            if has_request_context():
+                g.audit_actor = email
             return None, FORBIDDEN
         self._remember(token, email)
         return email, None

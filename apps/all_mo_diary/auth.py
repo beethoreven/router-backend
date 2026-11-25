@@ -4,12 +4,14 @@
   changing either signs every user out.
 - admin: the admin console's sessions, admin list and require_admin gate (shared.admin_auth).
 - rejections: rejected requests, counted (shared.rejections).
+- audit: the admin console's audit log (shared.audit_log), 180 days.
 """
 
 from __future__ import annotations
 
 from shared.admin_auth import AdminAuth
 from shared.app_pass import AppPass
+from shared.audit_log import AuditLog
 from shared.rejections import RejectionLog
 
 from . import config, db
@@ -29,3 +31,5 @@ admin = AdminAuth(
 )
 
 rejections = RejectionLog("all-mo-diary")
+
+audit = AuditLog(database=db.database, table="admin_audit_log")

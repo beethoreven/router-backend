@@ -16,11 +16,12 @@ from shared.quota import DailyCounter
 
 from . import app_config, cache, config, db, fonts, github_release
 from . import feedback as feedback_db
-from .auth import admin, rejections
+from .auth import admin, audit, rejections
 
 require_admin = admin.require_admin
 
 bp = Blueprint("diary_admin", __name__, url_prefix="/api/admin")
+audit.attach(bp)  # every write here, and every 403, gets an audit row (shared.audit_log)
 
 ADMIN_MAX_BODY = 256 * 1024
 # Login has to ask the database "is this an admin?", and any real Google account can try; attempts per
@@ -77,6 +78,7 @@ def login():
     if claims is None:
         rejections.note("admin login: invalid Google token")
         return _error(401, "invalid_token", "Google 憑證無效")
+    g.audit_actor = claims["email"]
     if not login_attempts.try_take(claims["sub"]):
         rejections.note("admin login: too many")
         return _error(429, "too_many", "登入嘗試太多次，明天再試")
@@ -268,6 +270,7 @@ def delete_feedback_by_email():
     email = normalize_email(_body().get("email"))
     if email is None:
         return _error(400, "invalid", "Email 格式不對")
+    g.audit_target = ""  # a deletion request: the audit row must not keep the address
     return jsonify({"deleted": _edit(feedback_db.delete_by_email, email)})
 
 
@@ -284,6 +287,7 @@ def list_admins():
 def add_admin():
     body = _body()
     email = normalize_email(body.get("email"))
+    g.audit_target = email or ""
     note = body.get("note", "")
     if email is None:
         return _error(400, "invalid", "Email 格式不對")
@@ -313,3 +317,14 @@ def remove_admin(email: str):
     removed = _edit(_remove)
     admin.forget_all()
     return jsonify({"ok": True}) if removed else _error(404, "not_found", "這個 Email 不在名單裡")
+
+
+# ── Audit log ─────────────────────────────────────────────────
+
+@bp.get("/audit")
+@require_admin
+def list_audit():
+    """Newest first, 50 per page; ?before=<id> for the next page. Read-only: nothing here deletes rows."""
+    before = request.args.get("before", type=int)
+    return jsonify({"items": _edit(lambda cur: audit.page(cur, before_id=before, limit=50))})
+

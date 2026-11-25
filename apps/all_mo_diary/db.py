@@ -11,6 +11,7 @@ so connections are rare.
 
 from __future__ import annotations
 
+from shared import audit_log
 from shared.database import Database
 
 from . import config
@@ -86,6 +87,7 @@ CREATE INDEX IF NOT EXISTS feedback_email_idx ON feedback (email, received_at);
 
 def _create_tables(cur) -> None:
     cur.execute(SCHEMA)
+    cur.execute(audit_log.schema_sql("admin_audit_log"))
     # CREATE TABLE IF NOT EXISTS leaves a table that already exists as it is, so a column added to
     # SCHEMA is also added here for databases whose table was created without it.
     cur.execute("ALTER TABLE fonts ADD COLUMN IF NOT EXISTS attribution TEXT NOT NULL DEFAULT ''")
