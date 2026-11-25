@@ -200,9 +200,22 @@ def _sync_formats(cur) -> None:
         )
 
 
+def _drop_replaced_audit_table(cur) -> None:
+    """admin_audit 是被 admin_audit_log(shared.audit_log)取代的操作紀錄表,沒有程式再讀寫它。
+
+    只在它是空的時候刪:開機時跑的程式不刪任何一筆紀錄,還有資料就留著,由人決定。"""
+    cur.execute("SELECT to_regclass('admin_audit') IS NOT NULL")
+    if not cur.fetchone()[0]:
+        return
+    cur.execute("SELECT EXISTS (SELECT 1 FROM admin_audit)")
+    if not cur.fetchone()[0]:
+        cur.execute("DROP TABLE admin_audit")
+
+
 def _create_tables(cur) -> None:
     cur.execute(_DDL)
     cur.execute(audit_log.schema_sql("admin_audit_log"))
+    _drop_replaced_audit_table(cur)
     cur.execute("INSERT INTO app_config (id) VALUES (true) ON CONFLICT DO NOTHING")
     _seed(cur, "food_list")
     _seed(cur, "units")
