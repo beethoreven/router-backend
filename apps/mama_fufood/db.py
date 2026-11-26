@@ -194,22 +194,9 @@ def _sync_formats(cur) -> None:
         )
 
 
-def _drop_replaced_audit_table(cur) -> None:
-    """admin_audit 是被 admin_audit_log(shared.audit_log)取代的操作紀錄表,沒有程式再讀寫它。
-
-    只在它是空的時候刪:開機時跑的程式不刪任何一筆紀錄,還有資料就留著,由人決定。"""
-    cur.execute("SELECT to_regclass('admin_audit') IS NOT NULL")
-    if not cur.fetchone()[0]:
-        return
-    cur.execute("SELECT EXISTS (SELECT 1 FROM admin_audit)")
-    if not cur.fetchone()[0]:
-        cur.execute("DROP TABLE admin_audit")
-
-
 def _create_tables(cur) -> None:
     cur.execute(_DDL)
     cur.execute(audit_log.schema_sql("admin_audit_log"))
-    _drop_replaced_audit_table(cur)
     # 後台 session 只存 token 的雜湊;還存原文的舊表會先清空改名(管理員重新登入一次)。
     cur.execute(admin_auth.upgrade_sessions_sql("sessions"))
     cur.execute(admin_auth.sessions_schema_sql("sessions"))

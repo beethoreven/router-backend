@@ -174,42 +174,6 @@ def test_no_ip_or_content_columns_and_rows_past_180_days_go(client, admin_token,
     assert "old" not in actors and "kept" in actors
 
 
-_REPLACED_TABLE = """
-CREATE TABLE admin_audit (
-    id           BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    at           TIMESTAMPTZ NOT NULL DEFAULT now(),
-    admin_email  TEXT NOT NULL,
-    action       TEXT NOT NULL,
-    detail       JSONB NOT NULL DEFAULT '{}'::jsonb
-);
-CREATE INDEX admin_audit_at_idx ON admin_audit (at);
-"""
-
-
-def _table_exists(db_url: str, name: str) -> bool:
-    with psycopg.connect(db_url) as conn:
-        return conn.execute("SELECT to_regclass(%s) IS NOT NULL", (name,)).fetchone()[0]
-
-
-def test_the_replaced_audit_table_is_dropped_at_startup(client, db):
-    """資料庫裡還留著被 admin_audit_log 取代的 admin_audit(空的):開機建表時刪掉。"""
-    with psycopg.connect(db) as conn:
-        conn.execute(_REPLACED_TABLE)
-    _login(client, "admin-sub", "admin@example.com")  # 第一次連資料庫,建表
-    assert not _table_exists(db, "admin_audit")
-    assert _table_exists(db, "admin_audit_log")
-
-
-def test_the_replaced_audit_table_is_kept_while_it_has_rows(client, db):
-    """開機時跑的程式不刪任何一筆紀錄:舊表還有資料就留著。"""
-    with psycopg.connect(db) as conn:
-        conn.execute(_REPLACED_TABLE)
-        conn.execute("INSERT INTO admin_audit (admin_email, action) VALUES ('admin@example.com', 'login')")
-    _login(client, "admin-sub", "admin@example.com")
-    with psycopg.connect(db) as conn:
-        assert conn.execute("SELECT count(*) FROM admin_audit").fetchone()[0] == 1
-
-
 def test_a_failed_audit_write_does_not_fail_the_request(client, admin_token, monkeypatch):
     from apps.mama_fufood import auth
 
