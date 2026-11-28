@@ -129,7 +129,8 @@ def _group_list() -> str:
     return "\n".join(lines)
 
 
-def handle_command(text: str, *, sender: str | None, private: bool) -> str | ImageReply:
+def handle_command(text: str, *, sender: str | None, private: bool,
+                   dry_run: bool = False) -> str | ImageReply:
     """處理一段已經清乾淨的指令文字，回傳要回覆的東西。
 
     多半是幾行字；走勢回的是 ImageReply，由 app.py 換成圖片訊息——網址要在
@@ -149,6 +150,10 @@ def handle_command(text: str, *, sender: str | None, private: bool) -> str | Ima
 
     # 只在私訊回：群組裡回的話，別人的 userId 整個群組都看得到。
     if private and text.replace(" ", "") == commands.GROUP_LIST:
+        if dry_run:
+            # 試跑的「誰在問」是呼叫的人自己填的（見 app.py）。股價是公開資料，冒充誰都一樣；
+            # 群組名單是別人的 userId 與名字，不能交給一個自己說是誰就是誰的入口。
+            return commands.DRY_RUN_NO_GROUP_LIST
         try:
             return _group_list()
         except Exception as exc:  # noqa: BLE001 - 見上面：一定要回一句（名單在資料庫裡）

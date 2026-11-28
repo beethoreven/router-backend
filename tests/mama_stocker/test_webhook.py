@@ -13,9 +13,13 @@ from apps.mama_stocker.line_utils import commands, images, signature
 AMY = "U" + "a" * 32        # 已開通（gate fixture）
 STRANGER = "U" + "b" * 32   # 沒開通
 GROUP = "C" + "c" * 32
+DRY_RUN_KEY = "test-dry-run-key-" + "k" * 32   # 跟 conftest 的 MAMA_STOCKER_ENV 同一把
 
 
-def _post(client, events, secret="test-secret", **headers):
+def _post(client, events, secret=None, **headers):
+    """secret 沒給就用該用的那一把：試跑（X-Dry-Run）用試跑鑰匙，其他用 channel secret。"""
+    if secret is None:
+        secret = DRY_RUN_KEY if headers.get("X-Dry-Run") == "1" else "test-secret"
     raw = json.dumps({"events": events}).encode()
     return client.post("/mama-stocker/line/webhook", data=raw, headers={
         "X-Line-Signature": signature.sign(raw, secret), **headers})
@@ -44,7 +48,7 @@ def calls(monkeypatch):
     monkeypatch.setattr(backend.line_handler, "track_group_members",
                         lambda event: log.append(("track", event["source"].get("userId"))))
     monkeypatch.setattr(backend.line_handler, "handle_command",
-                        lambda text, *, sender, private: "ok")
+                        lambda text, *, sender, private, dry_run=False: "ok")
     return log
 
 
@@ -124,7 +128,7 @@ def test_settings_come_from_the_mama_stocker_prefix(mama_stocker_env):
 
 def test_trend_reply_is_an_https_url_under_the_mama_stocker_prefix(mama_stocker, calls, monkeypatch):
     monkeypatch.setattr(backend.line_handler, "handle_command",
-                        lambda text, *, sender, private: images.ImageReply.trend("2330"))
+                        lambda text, *, sender, private, dry_run=False: images.ImageReply.trend("2330"))
     _post(mama_stocker, [_group_message(AMY, "@bot 台積電 走勢", tag_bot=True)])
     (_, _, message), = [c for c in calls if c[0] == "reply"]
     url = message[0]["originalContentUrl"]
@@ -190,6 +194,14 @@ def _dry_run_replies(client, event):
     return resp.json["dry_run"][0]["replies"]
 
 
+def _line_replies(client, monkeypatch, event):
+    """不是試跑，走 LINE 真的會走的那條路；回傳本來要送給 LINE 的回覆。"""
+    sent = []
+    monkeypatch.setattr(backend.line_client, "reply", lambda token, message: sent.append(message))
+    assert _post(client, [event]).status_code == 200
+    return sent
+
+
 @pytest.fixture
 def gate(monkeypatch, mama_stocker_env):
     """只有 AMY 開通；找股票一律找不到（不連證交所）；群組名單上有 STRANGER。
@@ -235,15 +247,54 @@ def test_people_not_allowed_get_only_the_no_permission_reply(gate, event):
     assert listed == []
 
 
-def test_group_list_is_answered_only_in_private(gate):
+def test_group_list_is_answered_only_in_private(gate, monkeypatch):
     """群組裡回的話，別人的 userId 整個群組都看得到。"""
     client, listed = gate
     in_group = _dry_run_replies(client, _group_message(AMY, "@bot 群組名單", tag_bot=True))
     assert in_group == [commands.USAGE]
     assert listed == []
-    in_private = _dry_run_replies(client, _private_message(AMY, "群組名單"))
+    in_private = _line_replies(client, monkeypatch, _private_message(AMY, "群組名單"))
     assert STRANGER in in_private[0]
     assert listed == [1]
+
+
+def test_dry_run_cannot_read_the_group_list(gate):
+    """試跑的「誰在問」是呼叫的人自己填的，所以試跑問不到別人的 userId。"""
+    client, listed = gate
+    for text in ("群組名單", "群組 名單"):
+        assert _dry_run_replies(client, _private_message(AMY, text)) == [commands.DRY_RUN_NO_GROUP_LIST]
+    assert listed == []
+
+
+def test_dry_run_takes_only_its_own_key(gate):
+    """兩把鑰匙各管各的：channel secret 不能試跑，試跑鑰匙不能假造 LINE 的事件。"""
+    client, _ = gate
+    event = _private_message(AMY, "台積電")
+    assert _post(client, [event], secret="test-secret", **{"X-Dry-Run": "1"}).status_code == 401
+    assert _post(client, [event], secret=DRY_RUN_KEY).status_code == 401
+    assert _post(client, [event], secret=DRY_RUN_KEY, **{"X-Dry-Run": "1"}).status_code == 200
+
+
+@pytest.mark.parametrize("key", [
+    None,                    # 沒設
+    "",                      # 設成空的
+    "k" * 31,                # 太短
+    "s" * 40,                # 跟 channel secret 同一串（見下面把 channel secret 也設成這串）
+])
+def test_dry_run_is_off_without_a_usable_key(mama_stocker_env, key):
+    from router.root import build
+
+    mama_stocker_env["MAMA_STOCKER__LINE_CHANNEL_SECRET"] = "s" * 40
+    if key is None:
+        del mama_stocker_env["MAMA_STOCKER__DRY_RUN_KEY"]
+    else:
+        mama_stocker_env["MAMA_STOCKER__DRY_RUN_KEY"] = key
+    client = build(environ=mama_stocker_env).test_client()
+    event = _private_message(AMY, "台積電")
+    for secret in (key or "", "s" * 40):
+        assert _post(client, [event], secret=secret, **{"X-Dry-Run": "1"}).status_code == 401
+    # LINE 真的送來的不受影響。
+    assert _post(client, [event], secret="s" * 40).status_code == 200
 
 
 def test_my_id_is_answered_only_in_private(gate):
@@ -265,7 +316,7 @@ def test_group_list_still_replies_when_the_database_is_down(gate, monkeypatch):
     def down():
         raise ConnectionError("資料庫連不上")
     monkeypatch.setattr(speakers, "pending", down)
-    assert _dry_run_replies(client, _private_message(AMY, "群組名單")) == [commands.UNAVAILABLE]
+    assert _line_replies(client, monkeypatch, _private_message(AMY, "群組名單")) == [commands.UNAVAILABLE]
 
 
 def test_unreadable_user_list_says_access_cannot_be_checked(gate, monkeypatch):

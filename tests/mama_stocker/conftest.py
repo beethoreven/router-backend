@@ -16,6 +16,7 @@ from tests.conftest import TEST_DATABASE_URL
 MAMA_STOCKER_ENV = {
     "MAMA_STOCKER__LINE_CHANNEL_SECRET": "test-secret",
     "MAMA_STOCKER__LINE_CHANNEL_ACCESS_TOKEN": "test-token",
+    "MAMA_STOCKER__DRY_RUN_KEY": "test-dry-run-key-" + "k" * 32,
     "MAMA_STOCKER__START_WARM_UP": "0",
 }
 

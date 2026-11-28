@@ -49,6 +49,10 @@ def create_app(settings: AppSettings):
     # 沒有資料庫就查不到誰有權限，等於沒有人能用——這也要講清楚。
     if not cfg.database_url:
         log.warning("MAMA_STOCKER__DATABASE_URL 未設定：查不到使用者名單，所有人都會被當成沒有權限")
+    # 設了卻不合規則的試跑鑰匙，跟沒設一樣不能試跑；差別是沒設多半是故意的，設錯要講。
+    if cfg.dry_run_key and not cfg.dry_run_enabled():
+        log.warning("MAMA_STOCKER__DRY_RUN_KEY 不能用（至少要 %d 個字，而且不能跟 channel secret 相同），"
+                    "試跑停用", config.DRY_RUN_KEY_MIN_LENGTH)
 
     app = new_app(__name__, max_content_length=MAX_CONTENT_LENGTH)
     app.register_blueprint(bp)
@@ -168,11 +172,18 @@ def line_webhook():
         return jsonify({"error": "LINE 未設定", "code": "line_not_configured"}), 503
 
     raw = request.get_data()
+    # 試跑用自己的鑰匙簽，不用 channel secret（見下面「試跑」）。兩把鑰匙各管各的：
+    # 帶 X-Dry-Run 的只認試跑鑰匙，不帶的只認 channel secret。
+    dry_run = request.headers.get("X-Dry-Run") == "1"
+    cfg = config.get()
+    if dry_run:
+        secret = cfg.dry_run_key if cfg.dry_run_enabled() else ""
+    else:
+        secret = line_client.channel_secret()
     # ★ 一定要用原始 bytes。先 json.loads 再 dumps 會改變空白與鍵序，
     #   雜湊就對不上——症狀是「設定明明都對卻一直 401」。
-    if not line_signature.verify(
-        raw, request.headers.get("X-Line-Signature"), line_client.channel_secret()
-    ):
+    # ★ secret 是空的（試跑鑰匙沒設或不合規則）時 verify 一律回 False。
+    if not line_signature.verify(raw, request.headers.get("X-Line-Signature"), secret):
         return jsonify({"error": "簽章驗證失敗", "code": "bad_signature"}), 401
 
     # force：不看 Content-Type。簽章已經證明這包是 LINE 送的，沒有理由因為
@@ -183,9 +194,13 @@ def line_webhook():
     #
     # 這條路是 2026-10-05 加的：線上回了錯的價格、又回「查不到」，而回覆只會
     # 出現在使用者的手機上，從外面完全看不到它回了什麼、卡在哪一個資料來源。
-    # ★ 簽章已經在上面驗過——拿得出 channel secret 的人才走得到這裡，所以這
-    #   不是一個公開的查詢入口。
-    if request.headers.get("X-Dry-Run") == "1":
+    # ★ 簽章已經在上面驗過——拿得出試跑鑰匙（MAMA_STOCKER__DRY_RUN_KEY）的人才走得到這裡，
+    #   所以這不是一個公開的查詢入口。
+    # ★ 試跑鑰匙是另外一把，不是 channel secret：試跑工具在開發機上跑，channel secret 放在
+    #   開發機上的話，開發機被拿走就等於能假造 LINE 的事件（塞假的群組成員、讓 bot 回覆）。
+    #   試跑鑰匙被拿走，最多是拿到本來就公開的股價；它不回覆、不記人，也問不到群組名單
+    #   （handler.handle_command 的 dry_run）。
+    if dry_run:
         out = []
         for event in body.get("events") or []:
             started = time.perf_counter()
@@ -245,7 +260,8 @@ def _handle_line_event(event: dict, *, dry_run: bool = False) -> list:
         return sent
 
     private = (event.get("source") or {}).get("type") == "user"
-    reply(_line_messages(line_handler.handle_command(text, sender=sender, private=private)))
+    reply(_line_messages(line_handler.handle_command(
+        text, sender=sender, private=private, dry_run=dry_run)))
     return sent
 
 
