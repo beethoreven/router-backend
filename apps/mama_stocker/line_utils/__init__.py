@@ -7,6 +7,10 @@
     MAMA_STOCKER__LINE_CHANNEL_SECRET        驗 webhook 簽章用
     MAMA_STOCKER__LINE_CHANNEL_ACCESS_TOKEN  呼叫 Reply API 用
 
+選填，沒設也不影響收訊：
+
+    MAMA_STOCKER__DRY_RUN_KEY                試跑專用的鑰匙（見 config.py 與 dry_run.py），沒設就不能試跑
+
 ## 只用 Reply
 
 Reply 是回應使用者傳來的那一則，**不計入免費額度**。這個 bot 所有功能都是

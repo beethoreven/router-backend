@@ -46,6 +46,7 @@ PER_APP_KEYS = (
     "SERVICE_ACCOUNT_JSON", "APPS_SCRIPT_SECRET", "PERMITTED_USERS",  # fireless-war
     "LINE_CHANNEL_SECRET",
     "LINE_CHANNEL_ACCESS_TOKEN",
+    "DRY_RUN_KEY",  # mama-stocker
 )
 
 # Keys that must differ between apps. Two apps on one database would mix their tables.
