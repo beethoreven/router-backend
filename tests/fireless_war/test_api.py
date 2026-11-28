@@ -7,7 +7,7 @@ import types
 import limits.storage.memory
 import pytest
 
-from apps.fireless_war import google_access
+from apps.fireless_war import google_access, routes
 from router.settings import ConfigError
 
 from .conftest import ENV, GM, STRANGER
@@ -154,8 +154,38 @@ def test_create_record_sends_the_verified_email_and_returns_the_warning(client, 
     assert url == "https://script.example/exec" and timeout == google_access.APPS_SCRIPT_TIMEOUT_SECONDS
     assert body == {"secret": "script-secret", "datetime": "2026_07_01_18_30", "editor_email": "gm@example.com"}
 
-    client.post(f"{P}/demo-record?datetime=2026_07_01_18_30", headers=STRANGER)
+    demo = client.post(f"{P}/demo-record?datetime=2026_07_01_18_30", headers=STRANGER)
     assert calls[1][1]["mode"] == "demo" and calls[1][1]["editor_email"] == "someone@example.com"
+    # Apps Script's warning text is for GMs only.
+    assert demo.status_code == 201 and demo.get_json() == {"spreadsheet_id": "new-sid"}
+
+
+def test_demo_failures_are_fixed_text(client, monkeypatch):
+    class Reply:
+        def raise_for_status(self):
+            pass
+
+        def json(self):
+            return {"statusCode": 500, "error": "Exception: owner-folder-detail"}
+
+    def broken(*args, **kwargs):
+        raise RuntimeError("inner-detail")
+
+    monkeypatch.setattr(google_access.requests, "post", lambda url, json, timeout: Reply())
+    monkeypatch.setattr(google_access, "find_file_by_name", broken)
+    monkeypatch.setattr(google_access, "spreadsheet_title", broken)
+    answers = [
+        client.post(f"{P}/demo-record?datetime=2026_07_01_18_30", headers=STRANGER),
+        client.get(f"{P}/demo-record?datetime=2026_07_01_18_30", headers=STRANGER),
+        client.get(f"{P}/demo-round?day=1st&type=Morning&spreadsheet_id=abc", headers=STRANGER),
+    ]
+    for resp, key in zip(answers, ("create_failed", "find_failed", "round_failed")):
+        assert resp.status_code == 500 and resp.get_json()["code"] == "google_error"
+        assert resp.get_json()["error"] == routes.DEMO_MESSAGES[key]
+
+    # A GM still sees Apps Script's own message.
+    gm = client.post(f"{P}/record?datetime=2026_07_01_18_30", headers=GM).get_json()
+    assert "owner-folder-detail" in gm["error"]
 
 
 def test_apps_script_failure_message_reaches_the_gm(client, monkeypatch):

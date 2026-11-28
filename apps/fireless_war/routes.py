@@ -21,6 +21,8 @@ CORS preflights never reach these counters: Flask answers OPTIONS itself, withou
 Error bodies: {"error": message for people, "code": ...}. For an unexpected failure only our own
 human-written messages (RuntimeError, e.g. Apps Script's error text or a bad cell value) reach the
 client; anything else shows its type name, so URLs or ids inside library errors aren't echoed back.
+The demo is open to any Google account, so it gets none of that: its failure messages are fixed text,
+and Apps Script's warning stays out of its answers.
 """
 
 from __future__ import annotations
@@ -57,6 +59,11 @@ def _describe(exc: Exception) -> str:
     return str(exc) if isinstance(exc, RuntimeError) else type(exc).__name__
 
 
+def _failure(msgs: dict, key: str, exc: Exception, *, demo: bool):
+    detail = _describe(exc)
+    return _error(500, "google_error", msgs[key] if demo else msgs[key] + detail)
+
+
 def register(app: Flask, limiter: Limiter) -> None:
     @app.get("/ready")
     def ready():
@@ -88,7 +95,7 @@ def register(app: Flask, limiter: Limiter) -> None:
         try:
             spreadsheet_id = record_data.find_record(datetime_str, demo=demo)
         except Exception as e:  # noqa: BLE001 — Drive unreachable, credentials rejected…
-            return _error(500, "google_error", msgs["find_failed"] + _describe(e))
+            return _failure(msgs, "find_failed", e, demo=demo)
         if spreadsheet_id is None:
             return _error(404, "not_found", msgs["not_found"])
         return jsonify({"spreadsheet_id": spreadsheet_id}), 200
@@ -106,11 +113,14 @@ def register(app: Flask, limiter: Limiter) -> None:
             # g.email is the verified Google email, not anything the caller typed.
             spreadsheet_id, warning = record_data.create_record(datetime_str, g.email, demo=demo)
         except Exception as e:  # noqa: BLE001 — Apps Script unreachable, wrong secret, Drive error…
-            return _error(500, "google_error", msgs["create_failed"] + _describe(e))
+            return _failure(msgs, "create_failed", e, demo=demo)
         result = {"spreadsheet_id": spreadsheet_id}
         if warning:
-            # The file exists; only adding the editor failed. Still a success.
-            result["warning"] = warning
+            # The file exists; only adding the editor failed. Still a success. The warning is Apps
+            # Script's own text, so only GMs get it.
+            log.warning("[fireless-war] file created, but adding the editor failed")
+            if not demo:
+                result["warning"] = warning
         return jsonify(result), 201
 
     def _round(demo: bool):
@@ -137,7 +147,7 @@ def register(app: Flask, limiter: Limiter) -> None:
                 return _error(403, "not_demo_file", msgs["not_demo_file"])
             result = parse_data.build_round_response(day, type_, spreadsheet_id, character_slugs=slugs)
         except Exception as e:  # noqa: BLE001 — sheet unreachable, tab missing, bad cell value…
-            return _error(500, "google_error", msgs["round_failed"] + _describe(e))
+            return _failure(msgs, "round_failed", e, demo=demo)
         return jsonify(result), 200
 
     @app.get("/record", endpoint="get_record")
@@ -197,7 +207,7 @@ DEMO_MESSAGES = {
     "invalid_sheet": "Invalid spreadsheet_id",
     "not_demo_file": "That spreadsheet is not a demo session file",
     "not_found": "No demo session file found for that date/time",
-    "find_failed": "Error looking up the demo session file: ",
-    "create_failed": "Error creating the demo session file: ",
-    "round_failed": "Error loading data: ",
+    "find_failed": "Could not look up the demo session file, please try again later",
+    "create_failed": "Could not create the demo session file, please try again later",
+    "round_failed": "Could not load the data, please try again later",
 }
